@@ -1,7 +1,10 @@
 #include "src/common/file_utils.h"
 
+#include <charconv>
+#include <cctype>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 
 namespace oaslam {
 
@@ -18,10 +21,25 @@ bool IsWebcamSource(const std::string& source) {
 }
 
 int ParseWebcamId(const std::string& source) {
-  if (source.size() > 7) {
-    return std::stoi(source.substr(7));
+  if (!IsWebcamSource(source)) {
+    return 0;
   }
-  return 0;
+
+  std::string_view suffix(source.data() + 6, source.size() - 6);
+  while (!suffix.empty() && !std::isdigit(static_cast<unsigned char>(suffix.front()))) {
+    suffix.remove_prefix(1);
+  }
+  if (suffix.empty()) {
+    return 0;
+  }
+
+  int webcam_id = 0;
+  const auto [end, error] =
+      std::from_chars(suffix.data(), suffix.data() + suffix.size(), webcam_id);
+  if (error != std::errc{} || end != suffix.data() + suffix.size()) {
+    return 0;
+  }
+  return webcam_id;
 }
 
 std::vector<int> LoadIgnoredCategories(const std::string& path) {

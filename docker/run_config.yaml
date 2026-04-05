@@ -1,0 +1,25 @@
+# OA-SLAM runtime config for docker/run_oa_slam.py
+# mode: mapping | localization
+mode: mapping
+
+# Paths
+vocabulary: /opt/OA-SLAM/Vocabulary/ORBvoc.txt
+camera_config: /opt/OA-SLAM/Cameras/rosbag_images.yaml
+output_root: /opt/OA-SLAM/Data/runs
+
+# Inputs
+# image_source: rgb.txt dir | .txt list | webcam | webcam:<id>
+image_source: /opt/OA-SLAM/Data/realsense_recording/test_static_extracted_lingbot/color
+# detections: .json | .onnx | none
+detections: /opt/OA-SLAM/Data/realsense_recording/test_static_extracted_lingbot/detections_run_sink_21_20260404_220904.json
+ignored_categories: none  # optional, use none to disable
+
+# Relocalization mode: points | objects | points+objects
+relocalization_mode: points+objects
+
+# Run naming
+run_name: ""  # empty = auto-derived from mode + input source
+
+# Localization only
+session_root: none           # previously saved oa-slam session, or none
+force_relocalization: false  # relocalize every frame

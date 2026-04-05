@@ -1,0 +1,8 @@
+.git
+.gitignore
+.codex
+build
+bin
+lib
+Data
+**/__pycache__

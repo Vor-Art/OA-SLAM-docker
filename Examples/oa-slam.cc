@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
   const std::string output_name = argv[7];
 
   const bool use_webcam = oaslam::IsWebcamSource(path_to_images);
-  const int webcam_id = oaslam::ParseWebcamId(path_to_images);
+  const int webcam_id = use_webcam ? oaslam::ParseWebcamId(path_to_images) : 0;
 
   std::string image_list_file = "rgb.txt";
   if (!use_webcam && oaslam::GetFileExtension(path_to_images) == "txt") {
@@ -103,6 +103,8 @@ int main(int argc, char** argv) {
 
   fs::path output_folder = output_name;
   fs::create_directories(output_folder);
+  const std::string output_label = 
+      output_folder.filename().empty() ? "run" : output_folder.filename().string();
 
   oaslam::SessionConfig session_config;
   session_config.initial_mode = oaslam::SessionMode::Mapping;
@@ -213,7 +215,7 @@ int main(int argc, char** argv) {
              << quaternion.z() << " " << quaternion.w() << "\n";
   }
 
-  std::ofstream json_file(output_folder / ("camera_poses_" + output_name + ".json"));
+  std::ofstream json_file(output_folder / ("camera_poses_" + output_label + ".json"));
   json_file << json_data;
 
   session.saveState(output_folder / "session");

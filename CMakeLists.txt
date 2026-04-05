@@ -109,6 +109,7 @@ target_link_libraries(oaslam_common PUBLIC oaslam_ports Eigen3::Eigen ${OpenCV_L
 
 add_library(oaslam_legacy_internal STATIC ${LEGACY_INTERNAL_SOURCES})
 target_include_directories(oaslam_legacy_internal PRIVATE
+  ${PROJECT_SOURCE_DIR}
   ${LEGACY_INTERNAL_INCLUDE_DIR}
   ${PROJECT_SOURCE_DIR}/Thirdparty/Osmap/include
   ${CMAKE_CURRENT_BINARY_DIR}
