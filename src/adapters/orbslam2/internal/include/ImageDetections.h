@@ -24,10 +24,11 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 #include <Eigen/Dense>
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
 
 #include "Utils.h"
 #include <opencv2/opencv.hpp>
@@ -86,7 +87,6 @@ public:
 private:
     std::unordered_map<std::string, std::vector<Detection::Ptr>> detections_;
     std::vector<std::string> frame_names_;
-    json data_;
 };
 
 

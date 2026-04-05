@@ -9,7 +9,6 @@
 
 namespace ORB_SLAM2 {
 class System;
-class Osmap;
 class Detection;
 }
 
@@ -23,10 +22,7 @@ class OrbSlam2BackendAdapter : public ISlamBackend {
   TrackingResult processFrame(const FramePacket& frame,
                               const std::vector<Detection2D>& detections,
                               const std::vector<PoseProposal>& pose_proposals) override;
-  void setMode(SessionMode mode) override;
   void reset() override;
-  void loadState(const std::filesystem::path& root) override;
-  void saveState(const std::filesystem::path& root) const override;
   void shutdown() override;
 
   bool shouldQuit() const;
@@ -38,9 +34,7 @@ class OrbSlam2BackendAdapter : public ISlamBackend {
   TrackingState mapTrackingState(int legacy_state, bool relocalizing) const;
 
   SlamBackendConfig config_;
-  SessionMode mode_ = SessionMode::Mapping;
   mutable std::unique_ptr<ORB_SLAM2::System> legacy_system_;
-  mutable std::unique_ptr<ORB_SLAM2::Osmap> osmap_;
   mutable bool is_shutdown_ = false;
 };
 

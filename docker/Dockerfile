@@ -15,6 +15,7 @@ ENV LC_ALL=en_US.UTF-8
 
 SHELL ["/bin/bash", "-c"]
 
+# todo delete   protobuf-compiler libprotobuf-dev 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     locales \
     ca-certificates \
@@ -117,22 +118,16 @@ RUN cd /opt && \
     cmake --install /opt/dlib/build && \
     ldconfig
 
-# Copy only third-party dependencies first (these rarely change)
-COPY Thirdparty /opt/OA-SLAM/Thirdparty
-
 # Build third-party dependencies (cached layer)
+COPY Thirdparty/DBoW2 /opt/OA-SLAM/Thirdparty/DBoW2
 RUN cd /opt/OA-SLAM/Thirdparty/DBoW2 && \
     cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && \
     cmake --build build --parallel ${NPROC}
 
+COPY Thirdparty/g2o /opt/OA-SLAM/Thirdparty/g2o
 RUN cd /opt/OA-SLAM/Thirdparty/g2o && \
     cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && \
     cmake --build build --parallel ${NPROC}
-
-RUN mkdir -p /opt/OA-SLAM/src /opt/OA-SLAM/include && \
-    cd /opt/OA-SLAM/Thirdparty/Osmap && \
-    sh build.sh && \
-    ldconfig
 
 # Copy vocabulary and extract (rarely changes)
 COPY Vocabulary /opt/OA-SLAM/Vocabulary
@@ -140,8 +135,6 @@ RUN cd /opt/OA-SLAM/Vocabulary && tar -xf ORBvoc.txt.tar.gz
 
 # Copy CMakeLists and other build configuration files
 COPY CMakeLists.txt /opt/OA-SLAM/
-COPY build.sh /opt/OA-SLAM/
-COPY docker /opt/OA-SLAM/docker
 
 # Copy source code and headers (these change more frequently)
 COPY include /opt/OA-SLAM/include

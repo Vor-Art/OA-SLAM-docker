@@ -1,7 +1,6 @@
 #ifndef OASLAM_PORTS_SLAM_BACKEND_H
 #define OASLAM_PORTS_SLAM_BACKEND_H
 
-#include <filesystem>
 #include <vector>
 
 #include "oaslam/core/frame_packet.h"
@@ -17,10 +16,7 @@ class ISlamBackend {
   virtual TrackingResult processFrame(
       const FramePacket& frame, const std::vector<Detection2D>& detections,
       const std::vector<PoseProposal>& pose_proposals) = 0;
-  virtual void setMode(SessionMode mode) = 0;
   virtual void reset() = 0;
-  virtual void loadState(const std::filesystem::path& root) = 0;
-  virtual void saveState(const std::filesystem::path& root) const = 0;
   virtual void shutdown() = 0;
 };
 

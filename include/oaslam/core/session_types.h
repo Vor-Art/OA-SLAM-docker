@@ -6,7 +6,6 @@
 
 namespace oaslam {
 
-enum class SessionMode { Mapping, Localization };
 enum class TrackingState { Bootstrapping, Tracking, Relocalizing, Lost };
 enum class RelocalizationMode { Points, Objects, PointsAndObjects };
 enum class ObservationSourceKind { None, File, Onnx };
@@ -17,7 +16,6 @@ struct SlamBackendConfig {
   bool use_viewer = true;
   bool use_ar_viewer = false;
   int use_objects_in_local_ba = 0;
-  bool force_relocalization = false;
   RelocalizationMode relocalization_mode = RelocalizationMode::Points;
 };
 
@@ -36,7 +34,6 @@ struct AgentGatewayConfig {
 };
 
 struct SessionConfig {
-  SessionMode initial_mode = SessionMode::Mapping;
   SlamBackendConfig slam_backend;
   ObservationSourceConfig observation_source;
   VisualizerConfig visualizer;

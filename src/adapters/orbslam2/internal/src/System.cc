@@ -51,7 +51,6 @@
 #include <pangolin/pangolin.h>
 #include <iomanip>
 #include <unistd.h>
-#include <nlohmann/json.hpp>
 #include "ObjectTrack.h"
 
 namespace ORB_SLAM2
@@ -481,50 +480,6 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
     cout << "Saved keyframe trajectory to " << filename << endl;
 }
 
-
-using json = nlohmann::json;
-
-void System::SaveKeyFrameTrajectoryJSON(const string &filename, const std::vector<std::string>& frames_filenames)
-{
-    vector<KeyFrame*> vpKFs = mpMap->GetAllKeyFrames();
-    sort(vpKFs.begin(),vpKFs.end(),KeyFrame::lId);
-
-    json json_data;
-    ofstream f;
-    f.open(filename.c_str());
-    f << fixed;
-
-    for(size_t i=0; i<vpKFs.size(); i++)
-    {
-
-        KeyFrame* pKF = vpKFs[i];
-
-        if(pKF->isBad())
-            continue;
-        cv::Mat Rt = pKF->GetPose();
-        if (Rt.cols && Rt.rows)
-        {
-            Eigen::Matrix4d m = ORB_SLAM2::cvToEigenMatrix<double, float, 4, 4>(Rt);
-
-            json R({{m(0, 0), m(0, 1), m(0, 2)},
-                    {m(1, 0), m(1, 1), m(1, 2)},
-                    {m(2, 0), m(2, 1), m(2, 2)}});
-            json t({m(0, 3), m(1, 3), m(2, 3)});
-            json image_data;
-            image_data["file_name"] = frames_filenames[pKF->mnFrameId];
-            image_data["R"] = R;
-            image_data["t"] = t;
-            json_data.push_back(image_data);
-        }
-    }
-
-
-    std::ofstream json_file(filename);
-    json_file << json_data;
-    json_file.close();
-
-    cout << "Saved keyframe trajectory to " << filename << endl;
-}
 
 void System::SaveTrajectoryKITTI(const string &filename)
 {

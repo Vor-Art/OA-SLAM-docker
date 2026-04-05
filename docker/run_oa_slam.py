@@ -15,7 +15,6 @@ PROJECT_ROOT = Path("/opt/OA-SLAM")
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "docker" / "run_config.yaml"
 NONE_VALUES = {"", "none", "null", "None", "NULL", None}
 GENERIC_INPUT_DIRS = {"color", "rgb", "images", "image", "frames"}
-ALLOWED_MODES = {"mapping", "localization"}
 ALLOWED_RELOCALIZATION_MODES = {"points", "objects", "points+objects"}
 
 
@@ -32,14 +31,6 @@ def as_optional_string(value) -> str:
     if value in NONE_VALUES:
         return "none"
     return str(value).strip()
-
-
-def as_bool(value) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value in NONE_VALUES:
-        return False
-    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def resolve_path(value, *, allow_none: bool = False) -> str:
@@ -70,7 +61,7 @@ def resolve_image_source(value) -> str:
     return validate_existing_path("Image source", raw)
 
 
-def derive_run_name(mode: str, image_source: str, run_name: str) -> str:
+def derive_run_name(image_source: str, run_name: str) -> str:
     if run_name:
         return run_name
     if image_source.startswith("webcam"):
@@ -80,14 +71,10 @@ def derive_run_name(mode: str, image_source: str, run_name: str) -> str:
         suffix = path.stem if path.suffix else path.name
         if suffix in GENERIC_INPUT_DIRS and path.parent.name:
             suffix = path.parent.name
-    return f"{mode}_{suffix or 'run'}"
+    return f"mapping_{suffix or 'run'}"
 
 
 def build_command(config: dict) -> tuple[list[str], Path]:
-    mode = str(config.get("mode", "mapping")).strip().lower()
-    if mode not in ALLOWED_MODES:
-        raise ValueError("mode must be 'mapping' or 'localization'")
-
     vocabulary = validate_existing_path("Vocabulary", config.get("vocabulary"))
     camera_config = validate_existing_path("Camera config", config.get("camera_config"))
     image_source = resolve_image_source(config.get("image_source"))
@@ -103,37 +90,20 @@ def build_command(config: dict) -> tuple[list[str], Path]:
     output_root = Path(resolve_path(config.get("output_root", "Data/runs")))
     output_root.mkdir(parents=True, exist_ok=True)
     run_name = "" if config.get("run_name") in NONE_VALUES else str(config.get("run_name")).strip()
-    output_dir = output_root / f"{derive_run_name(mode, image_source, run_name)}_{datetime.now():%Y%m%d_%H%M%S}"
+    output_dir = output_root / f"{derive_run_name(image_source, run_name)}_{datetime.now():%Y%m%d_%H%M%S}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if mode == "mapping":
-        executable = PROJECT_ROOT / "bin" / "oa-slam"
-        command = [
-            str(executable),
-            vocabulary,
-            camera_config,
-            image_source,
-            detections,
-            ignored_categories,
-            relocalization_mode,
-            str(output_dir),
-        ]
-    else:
-        executable = PROJECT_ROOT / "bin" / "oa-slam_localization"
-        session_root = validate_existing_path("Session root", config.get("session_root"), allow_none=False)
-        force_relocalization = "1" if as_bool(config.get("force_relocalization", False)) else "0"
-        command = [
-            str(executable),
-            vocabulary,
-            camera_config,
-            image_source,
-            detections,
-            ignored_categories,
-            session_root,
-            relocalization_mode,
-            str(output_dir),
-            force_relocalization,
-        ]
+    executable = PROJECT_ROOT / "bin" / "oa-slam"
+    command = [
+        str(executable),
+        vocabulary,
+        camera_config,
+        image_source,
+        detections,
+        ignored_categories,
+        relocalization_mode,
+        str(output_dir),
+    ]
 
     if not executable.exists():
         raise FileNotFoundError(f"Executable does not exist: {executable}")

@@ -1,8 +1,5 @@
 #include "src/adapters/oa_objects/oa_object_pipeline_adapter.h"
 
-#include <filesystem>
-#include <fstream>
-
 namespace oaslam {
 
 ObjectPreTrack OaObjectPipelineAdapter::preTrack(const FramePacket& frame,
@@ -31,21 +28,6 @@ ObjectStateView OaObjectPipelineAdapter::postTrack(const FramePacket& frame,
   return view;
 }
 
-void OaObjectPipelineAdapter::setMode(SessionMode mode) {
-  mode_ = mode;
-}
-
 void OaObjectPipelineAdapter::reset() {}
-
-void OaObjectPipelineAdapter::loadState(const std::filesystem::path& root) {
-  (void)root;
-}
-
-void OaObjectPipelineAdapter::saveState(const std::filesystem::path& root) const {
-  std::filesystem::create_directories(root);
-  std::ofstream output(root / "object_pipeline.yaml");
-  output << "mode: " << (mode_ == SessionMode::Localization ? "localization" : "mapping") << "\n";
-  output << "implementation: passthrough_v1\n";
-}
 
 }  // namespace oaslam

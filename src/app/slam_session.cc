@@ -2,21 +2,10 @@
 
 #include <utility>
 
-#include "src/app/session_state_io.h"
-
 namespace oaslam {
 
 SlamSession::SlamSession(SessionConfig config, ModuleBundle modules)
-    : config_(std::move(config)),
-      mode_(config_.initial_mode),
-      modules_(std::move(modules)) {
-  if (modules_.slam_backend) {
-    modules_.slam_backend->setMode(mode_);
-  }
-  if (modules_.object_pipeline) {
-    modules_.object_pipeline->setMode(mode_);
-  }
-}
+    : config_(std::move(config)), modules_(std::move(modules)) {}
 
 SessionFrameResult SlamSession::processFrame(const FramePacket& frame) {
   if (modules_.agent_gateway) {
@@ -59,41 +48,6 @@ SessionFrameResult SlamSession::processFrame(const FramePacket& frame) {
   result.objects = std::move(objects);
   result.quit_requested = modules_.visualizer && modules_.visualizer->shouldQuit();
   return result;
-}
-
-void SlamSession::setMode(SessionMode mode) {
-  mode_ = mode;
-  if (modules_.slam_backend) {
-    modules_.slam_backend->setMode(mode_);
-  }
-  if (modules_.object_pipeline) {
-    modules_.object_pipeline->setMode(mode_);
-  }
-}
-
-void SlamSession::loadState(const std::filesystem::path& root) {
-  const auto paths = BuildSessionStatePaths(root);
-  EnsureSessionStateDirectories(paths);
-
-  if (modules_.slam_backend) {
-    modules_.slam_backend->loadState(paths.root);
-  }
-  if (modules_.object_pipeline) {
-    modules_.object_pipeline->loadState(paths.objects_dir);
-  }
-}
-
-void SlamSession::saveState(const std::filesystem::path& root) const {
-  const auto paths = BuildSessionStatePaths(root);
-  EnsureSessionStateDirectories(paths);
-  WriteSessionMetadata(paths, config_, mode_);
-
-  if (modules_.slam_backend) {
-    modules_.slam_backend->saveState(paths.root);
-  }
-  if (modules_.object_pipeline) {
-    modules_.object_pipeline->saveState(paths.objects_dir);
-  }
 }
 
 void SlamSession::reset() {

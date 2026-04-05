@@ -28,14 +28,10 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/videoio.hpp>
 
-#include <nlohmann/json.hpp>
-
 #include "oaslam/app/module_factories.h"
 #include "oaslam/app/slam_session.h"
 #include "src/common/eigen_utils.h"
 #include "src/common/file_utils.h"
-
-using json = nlohmann::json;
 
 namespace fs = std::filesystem;
 
@@ -107,13 +103,11 @@ int main(int argc, char** argv) {
       output_folder.filename().empty() ? "run" : output_folder.filename().string();
 
   oaslam::SessionConfig session_config;
-  session_config.initial_mode = oaslam::SessionMode::Mapping;
   session_config.slam_backend.vocabulary_file = vocabulary_file;
   session_config.slam_backend.camera_settings_file = camera_file;
   session_config.slam_backend.use_viewer = true;
   session_config.slam_backend.use_ar_viewer = false;
   session_config.slam_backend.use_objects_in_local_ba = 0;
-  session_config.slam_backend.force_relocalization = false;
   session_config.slam_backend.relocalization_mode =
       ParseRelocalizationMode(relocalization_mode_value);
   session_config.observation_source.kind = ParseObservationSourceKind(detections_file);
@@ -192,21 +186,14 @@ int main(int argc, char** argv) {
     }
   }
 
-  json json_data;
-  std::ofstream txt_file(output_folder / ("camera_poses_" + output_name + ".txt"));
-  std::ofstream tum_file(output_folder / ("camera_poses_" + output_name + "_tum.txt"));
+  std::ofstream txt_file(output_folder / "camera_poses" / (output_label + ".txt"));
+  std::ofstream tum_file(output_folder / "camera_poses" / (output_label + "_tum.txt"));
   for (std::size_t i = 0; i < poses.size(); ++i) {
     const auto& pose = poses[i];
     txt_file << i << " " << pose(0, 0) << " " << pose(0, 1) << " " << pose(0, 2) << " "
              << pose(0, 3) << " " << pose(1, 0) << " " << pose(1, 1) << " " << pose(1, 2)
              << " " << pose(1, 3) << " " << pose(2, 0) << " " << pose(2, 1) << " "
              << pose(2, 2) << " " << pose(2, 3) << "\n";
-
-    json rotation({{pose(0, 0), pose(0, 1), pose(0, 2)},
-                   {pose(1, 0), pose(1, 1), pose(1, 2)},
-                   {pose(2, 0), pose(2, 1), pose(2, 2)}});
-    json translation({pose(0, 3), pose(1, 3), pose(2, 3)});
-    json_data.push_back({{"file_name", filenames[i]}, {"R", rotation}, {"t", translation}});
 
     const Eigen::Matrix4d eigen_pose = oaslam::CvTransformToEigen(pose);
     const Eigen::Quaterniond quaternion(eigen_pose.block<3, 3>(0, 0));
@@ -215,10 +202,6 @@ int main(int argc, char** argv) {
              << quaternion.z() << " " << quaternion.w() << "\n";
   }
 
-  std::ofstream json_file(output_folder / ("camera_poses_" + output_label + ".json"));
-  json_file << json_data;
-
-  session.saveState(output_folder / "session");
   session.shutdown();
 
   if (!tracking_times.empty()) {

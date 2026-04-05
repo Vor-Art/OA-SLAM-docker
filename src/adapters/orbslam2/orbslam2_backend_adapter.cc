@@ -1,14 +1,11 @@
 #include "src/adapters/orbslam2/orbslam2_backend_adapter.h"
 
 #include <algorithm>
-#include <filesystem>
 #include <memory>
 #include <utility>
 
-#include "Thirdparty/Osmap/include/Osmap.h"
 #include "src/adapters/orbslam2/internal/include/MapPoint.h"
 #include "src/adapters/orbslam2/internal/include/System.h"
-#include "src/app/session_state_io.h"
 #include "src/common/opencv_utils.h"
 
 namespace oaslam {
@@ -48,10 +45,6 @@ void OrbSlam2BackendAdapter::ensureLegacyRuntime() const {
       config_.vocabulary_file, config_.camera_settings_file, ORB_SLAM2::System::MONOCULAR,
       config_.use_viewer, config_.use_ar_viewer, config_.use_objects_in_local_ba);
   legacy_system_->SetRelocalizationMode(ToLegacyRelocalizationMode(config_.relocalization_mode));
-  osmap_ = std::make_unique<ORB_SLAM2::Osmap>(*legacy_system_);
-  if (mode_ == SessionMode::Localization) {
-    legacy_system_->ActivateLocalizationMode();
-  }
 }
 
 std::vector<std::shared_ptr<ORB_SLAM2::Detection>> OrbSlam2BackendAdapter::toLegacyDetections(
@@ -89,15 +82,12 @@ TrackingResult OrbSlam2BackendAdapter::processFrame(
 
   ensureLegacyRuntime();
   const auto legacy_detections = toLegacyDetections(detections);
-  const cv::Mat pose = legacy_system_->TrackMonocular(frame.image, frame.timestamp, legacy_detections,
-                                                      config_.force_relocalization);
+  const cv::Mat pose = legacy_system_->TrackMonocular(frame.image, frame.timestamp, legacy_detections, false);
 
   TrackingResult result;
   result.relocalization_duration_ms = legacy_system_->relocalization_duration;
   result.relocalization_success = legacy_system_->relocalization_status;
-  result.state = mapTrackingState(legacy_system_->GetTrackingState(),
-                                  config_.force_relocalization &&
-                                      legacy_system_->relocalization_duration >= 0.0);
+  result.state = mapTrackingState(legacy_system_->GetTrackingState(), false);
 
   if (!pose.empty()) {
     result.has_pose = true;
@@ -133,34 +123,9 @@ TrackingResult OrbSlam2BackendAdapter::processFrame(
   return result;
 }
 
-void OrbSlam2BackendAdapter::setMode(SessionMode mode) {
-  mode_ = mode;
-  ensureLegacyRuntime();
-  if (mode == SessionMode::Localization) {
-    legacy_system_->ActivateLocalizationMode();
-  } else {
-    legacy_system_->DeactivateLocalizationMode();
-  }
-}
-
 void OrbSlam2BackendAdapter::reset() {
   ensureLegacyRuntime();
   legacy_system_->Reset();
-}
-
-void OrbSlam2BackendAdapter::loadState(const std::filesystem::path& root) {
-  ensureLegacyRuntime();
-  const auto paths = BuildSessionStatePaths(root);
-  const auto yaml_path = paths.backend_dir / "legacy_map.yaml";
-  osmap_->mapLoad(yaml_path.string());
-}
-
-void OrbSlam2BackendAdapter::saveState(const std::filesystem::path& root) const {
-  ensureLegacyRuntime();
-  const auto paths = BuildSessionStatePaths(root);
-  EnsureSessionStateDirectories(paths);
-  const auto base_path = paths.backend_dir / "legacy_map";
-  osmap_->mapSave(base_path.string());
 }
 
 void OrbSlam2BackendAdapter::shutdown() {

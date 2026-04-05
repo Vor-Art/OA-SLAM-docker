@@ -1,4 +1,5 @@
 %YAML:1.0
+---
 
 #--------------------------------------------------------------------------------------------
 # Camera Parameters. Adjust them!
@@ -26,11 +27,11 @@ Camera.fps: 5
 Camera.RGB: 1
 
 # Save per-frame detections in OA-SLAM JSON format (0/1 or false/true)
-save_detections: true
+save_detections: 1
 
 # Force deterministic replay by using a fixed seed and waiting for SLAM workers
 # to finish each frame before advancing to the next one.
-deterministic_mode: true
+deterministic_mode: 1
 deterministic_seed: 0
 
 #--------------------------------------------------------------------------------------------

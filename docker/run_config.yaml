@@ -1,6 +1,4 @@
 # OA-SLAM runtime config for docker/run_oa_slam.py
-# mode: mapping | localization
-mode: mapping
 
 # Paths
 vocabulary: /opt/OA-SLAM/Vocabulary/ORBvoc.txt
@@ -18,8 +16,4 @@ ignored_categories: none  # optional, use none to disable
 relocalization_mode: points+objects
 
 # Run naming
-run_name: ""  # empty = auto-derived from mode + input source
-
-# Localization only
-session_root: none           # previously saved oa-slam session, or none
-force_relocalization: false  # relocalize every frame
+run_name: ""  # empty = auto-derived from input source

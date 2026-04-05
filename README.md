@@ -31,13 +31,10 @@
 - [OpenCV](http://opencv.org) to manipulate images and features. Version >= 4 is required for live object detection. (tested with 4.6)
 - [Eigen3](https://gitlab.com/libeigen/eigen) for linear algebra.
 - [Dlib](https://github.com/davisking/dlib) for the Hungarian algorithm.
-- [Protocol Buffers](https://github.com/protocolbuffers/protobuf) for Osmap.
 
 Included in the *Thirdparty* folder:
 - [DBoW2](https://github.com/dorian3d/DBoW2) for place recognition.
 - [g2o](https://github.com/RainerKuemmerle/g2o) for graph-based non-linear optimization.
-- [JSON](https://github.com/nlohmann/json) for I/O json files.
-- [Osmap](https://github.com/AlejandroSilvestri/osmap) for map saving/loading. Modified version to handle objects.
 
 ## Building
 
@@ -48,7 +45,7 @@ git clone https://gitlab.inria.fr/tangram/oa-slam OA-SLAM --recursive
 
 Build OA-SLAM:
 ```
-sh build.sh
+docker compose -f docker/docker-compose.yml build
 ```
 
 
@@ -118,42 +115,7 @@ These weights are either trained on COCO dataset or fine-tuned on our statutes a
 
 In ```webcam_X``` replace **X** by webcam id. YOLOv5 weights are in ONNX format. You can convert PyTorch weights into ONNX format using the ```export.py``` script in [YOLOv5](https://github.com/ultralytics/yolov5).
 
-In OA-SLAM, YOLOv5 expects images of size 320 x 320. Original size (640 x 640) can be used by modifying ```src/ImageDetections.cc:108```.
-
-
-
-# Localization mode
-
-
-This mode can be used when you have a good map of your working area. In this mode the Point and Object Mapping is deactivated. The system localizes and track the camera in the map, using relocalization if needed.
-It is possible to force relocalization on each frame by setting 'force_relocalization_on_each_frame' to 1.
-
-Usage:
-```
-  ./oa-slam_localization
-      vocabulary_file
-      camera_file
-      path_to_image_sequence (.txt file listing the images or a folder with rgb.txt)
-      detections_file (.json file with detections or .onnx yolov5 weights)
-      categories_to_ignore_file (file containing the categories to ignore (one category_id per line))
-      map_file (.yaml)
-      relocalization_mode ('points', 'objects' or 'points+objects')
-      output_name 
-      force_relocalization_on_each_frame (0 or 1)
-```
-
-
-Example to run OA-SLAM in **Localization** mode on an existing map of the scene *Table* (pre-built from the image sequence *table_6*):
-
-```
-./oa-slam_localization ../Vocabulary/ORBvoc.txt ../Cameras/MI9T_640x360_0.6.yaml ../Data/table_9/frames/  ../Data/detections_yolov5_table_9.json null ../Data/table_6_map/map_table.yaml points+objects table_reloc 0
-```
-
-Example to run OA-SLAM in **Localization** mode on an existing map of the scene *Sink* (pre-built from the image sequence *sink_13*):
-```
-./oa-slam_localization ../Vocabulary/ORBvoc.txt ../Cameras/MI9T_640x360_0.6.yaml ../Data/sink_18/frames/  ../Data/detections_yolov5_sink_18.json null ../Data/sink_13_map/map_sink.yaml points+objects sink_reloc 0
-```
-For both examples, you can check that relocalization fails when only points are used.
+In OA-SLAM, YOLOv5 expects images of size 320 x 320. Original size (640 x 640) can be used by modifying ```src/adapters/orbslam2/internal/src/ImageDetections.cc```.
 
 
 
@@ -196,6 +158,5 @@ OA-SLAM executables are built in the folder ```/opt/OA-SLAM/bin```.
 # License
 
 OA-SLAM is released under a GPLv3 license. The code is based on [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2).
-
 
 

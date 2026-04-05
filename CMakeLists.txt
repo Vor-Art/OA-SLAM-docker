@@ -28,13 +28,7 @@ endif()
 
 find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Pangolin REQUIRED)
-find_package(Protobuf REQUIRED)
 find_package(dlib REQUIRED)
-
-set(JSON_BuildTests OFF CACHE INTERNAL "")
-add_subdirectory(Thirdparty/json)
-
-protobuf_generate_cpp(OSMAP_PROTO_SRCS OSMAP_PROTO_HDRS Thirdparty/Osmap/osmap.proto)
 
 set(LEGACY_INTERNAL_DIR ${PROJECT_SOURCE_DIR}/src/adapters/orbslam2/internal)
 set(LEGACY_INTERNAL_INCLUDE_DIR ${LEGACY_INTERNAL_DIR}/include)
@@ -76,8 +70,6 @@ set(LEGACY_INTERNAL_SOURCES
   ${LEGACY_INTERNAL_SOURCE_DIR}/p3p.cc
   ${LEGACY_INTERNAL_SOURCE_DIR}/Localization.cc
   ${LEGACY_INTERNAL_SOURCE_DIR}/ARViewer.cc
-  Thirdparty/Osmap/src/Osmap.cpp
-  ${OSMAP_PROTO_SRCS}
 )
 
 set(OASLAM_COMMON_SOURCES
@@ -111,11 +103,8 @@ add_library(oaslam_legacy_internal STATIC ${LEGACY_INTERNAL_SOURCES})
 target_include_directories(oaslam_legacy_internal PRIVATE
   ${PROJECT_SOURCE_DIR}
   ${LEGACY_INTERNAL_INCLUDE_DIR}
-  ${PROJECT_SOURCE_DIR}/Thirdparty/Osmap/include
-  ${CMAKE_CURRENT_BINARY_DIR}
   ${EIGEN3_INCLUDE_DIR}
   ${Pangolin_INCLUDE_DIRS}
-  ${PROTOBUF_INCLUDE_DIR}
 )
 target_link_libraries(oaslam_legacy_internal PUBLIC
   ${OpenCV_LIBS}
@@ -123,8 +112,6 @@ target_link_libraries(oaslam_legacy_internal PUBLIC
   ${Pangolin_LIBRARIES}
   ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
   ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
-  ${PROTOBUF_LIBRARIES}
-  nlohmann_json::nlohmann_json
   stdc++fs
   dlib::dlib
 )
@@ -149,7 +136,6 @@ add_library(oaslam_adapter_orbslam2 STATIC
 target_include_directories(oaslam_adapter_orbslam2 PUBLIC
   ${PROJECT_SOURCE_DIR}/include
   ${PROJECT_SOURCE_DIR}
-  ${CMAKE_CURRENT_BINARY_DIR}
 )
 target_include_directories(oaslam_adapter_orbslam2 PRIVATE
   ${LEGACY_INTERNAL_INCLUDE_DIR}
@@ -195,7 +181,6 @@ target_link_libraries(oaslam_adapter_agent PUBLIC
 
 add_library(oaslam_app STATIC
   src/app/slam_session.cc
-  src/app/session_state_io.cc
   src/app/module_factories.cc
 )
 target_include_directories(oaslam_app PUBLIC
@@ -224,7 +209,4 @@ target_link_libraries(oaslam_sdk INTERFACE
 )
 
 add_executable(oa-slam Examples/oa-slam.cc)
-target_link_libraries(oa-slam PRIVATE oaslam_sdk nlohmann_json::nlohmann_json)
-
-add_executable(oa-slam_localization Examples/oa-slam_localization.cc)
-target_link_libraries(oa-slam_localization PRIVATE oaslam_sdk nlohmann_json::nlohmann_json)
+target_link_libraries(oa-slam PRIVATE oaslam_sdk)

@@ -20,11 +20,311 @@
 
 #include "ImageDetections.h"
 
+#include <cctype>
+#include <cstdlib>
 #include <filesystem>
-#include <unordered_set>
+#include <iterator>
+#include <stdexcept>
+#include <string_view>
 
 
 namespace fs = std::filesystem;
+
+namespace {
+
+class DetectionJsonParser {
+ public:
+  explicit DetectionJsonParser(std::string_view input) : input_(input) {}
+
+  struct ParsedDetection {
+    unsigned int category_id = 0;
+    double score = 0.0;
+    ORB_SLAM2::BBox2 bbox = ORB_SLAM2::BBox2::Zero();
+  };
+
+  struct ParsedFrame {
+    std::string file_name;
+    std::vector<ParsedDetection> detections;
+  };
+
+  std::vector<ParsedFrame> parseFrames() {
+    skipWhitespace();
+    expect('[');
+
+    std::vector<ParsedFrame> frames;
+    skipWhitespace();
+    if (consume(']')) {
+      return frames;
+    }
+
+    do {
+      frames.push_back(parseFrame());
+      skipWhitespace();
+    } while (consume(','));
+
+    expect(']');
+    skipWhitespace();
+    if (!isAtEnd()) {
+      throw std::runtime_error("unexpected trailing content");
+    }
+    return frames;
+  }
+
+ private:
+  ParsedFrame parseFrame() {
+    expect('{');
+
+    ParsedFrame frame;
+    skipWhitespace();
+    if (consume('}')) {
+      return frame;
+    }
+
+    do {
+      const std::string key = parseString();
+      expect(':');
+
+      if (key == "file_name") {
+        frame.file_name = parseString();
+      } else if (key == "detections") {
+        frame.detections = parseDetections();
+      } else {
+        skipValue();
+      }
+      skipWhitespace();
+    } while (consume(','));
+
+    expect('}');
+    return frame;
+  }
+
+  std::vector<ParsedDetection> parseDetections() {
+    expect('[');
+
+    std::vector<ParsedDetection> detections;
+    skipWhitespace();
+    if (consume(']')) {
+      return detections;
+    }
+
+    do {
+      detections.push_back(parseDetection());
+      skipWhitespace();
+    } while (consume(','));
+
+    expect(']');
+    return detections;
+  }
+
+  ParsedDetection parseDetection() {
+    expect('{');
+
+    ParsedDetection detection;
+    skipWhitespace();
+    if (consume('}')) {
+      return detection;
+    }
+
+    do {
+      const std::string key = parseString();
+      expect(':');
+
+      if (key == "bbox") {
+        detection.bbox = parseBBox();
+      } else if (key == "category_id") {
+        detection.category_id = static_cast<unsigned int>(parseNumber());
+      } else if (key == "detection_score") {
+        detection.score = parseNumber();
+      } else {
+        skipValue();
+      }
+      skipWhitespace();
+    } while (consume(','));
+
+    expect('}');
+    return detection;
+  }
+
+  ORB_SLAM2::BBox2 parseBBox() {
+    expect('[');
+
+    ORB_SLAM2::BBox2 bbox = ORB_SLAM2::BBox2::Zero();
+    for (int i = 0; i < 4; ++i) {
+      bbox(i) = parseNumber();
+      if (i < 3) {
+        expect(',');
+      }
+    }
+
+    expect(']');
+    return bbox;
+  }
+
+  std::string parseString() {
+    expect('"');
+
+    std::string value;
+    while (!isAtEnd()) {
+      const char c = input_[position_++];
+      if (c == '"') {
+        return value;
+      }
+      if (c == '\\') {
+        if (isAtEnd()) {
+          throw std::runtime_error("unterminated escape sequence");
+        }
+
+        const char escaped = input_[position_++];
+        switch (escaped) {
+          case '"':
+          case '\\':
+          case '/':
+            value.push_back(escaped);
+            break;
+          case 'b':
+            value.push_back('\b');
+            break;
+          case 'f':
+            value.push_back('\f');
+            break;
+          case 'n':
+            value.push_back('\n');
+            break;
+          case 'r':
+            value.push_back('\r');
+            break;
+          case 't':
+            value.push_back('\t');
+            break;
+          default:
+            throw std::runtime_error("unsupported escaped character");
+        }
+        continue;
+      }
+
+      value.push_back(c);
+    }
+
+    throw std::runtime_error("unterminated string");
+  }
+
+  double parseNumber() {
+    skipWhitespace();
+    const char* start = input_.data() + position_;
+    char* end = nullptr;
+    const double value = std::strtod(start, &end);
+    if (end == start) {
+      throw std::runtime_error("expected number");
+    }
+
+    position_ = static_cast<std::size_t>(end - input_.data());
+    return value;
+  }
+
+  void skipValue() {
+    skipWhitespace();
+    if (isAtEnd()) {
+      throw std::runtime_error("unexpected end of input");
+    }
+
+    const char c = input_[position_];
+    if (c == '{') {
+      consumeObject();
+      return;
+    }
+    if (c == '[') {
+      consumeArray();
+      return;
+    }
+    if (c == '"') {
+      parseString();
+      return;
+    }
+    if (std::isdigit(static_cast<unsigned char>(c)) || c == '-' || c == '+') {
+      parseNumber();
+      return;
+    }
+    if (consumeLiteral("true") || consumeLiteral("false") || consumeLiteral("null")) {
+      return;
+    }
+
+    throw std::runtime_error("unsupported JSON value");
+  }
+
+  void consumeObject() {
+    expect('{');
+    skipWhitespace();
+    if (consume('}')) {
+      return;
+    }
+
+    do {
+      parseString();
+      expect(':');
+      skipValue();
+      skipWhitespace();
+    } while (consume(','));
+
+    expect('}');
+  }
+
+  void consumeArray() {
+    expect('[');
+    skipWhitespace();
+    if (consume(']')) {
+      return;
+    }
+
+    do {
+      skipValue();
+      skipWhitespace();
+    } while (consume(','));
+
+    expect(']');
+  }
+
+  bool consumeLiteral(std::string_view literal) {
+    skipWhitespace();
+    if (input_.substr(position_, literal.size()) != literal) {
+      return false;
+    }
+
+    position_ += literal.size();
+    return true;
+  }
+
+  bool consume(char expected) {
+    skipWhitespace();
+    if (!isAtEnd() && input_[position_] == expected) {
+      ++position_;
+      return true;
+    }
+    return false;
+  }
+
+  void expect(char expected) {
+    skipWhitespace();
+    if (isAtEnd() || input_[position_] != expected) {
+      throw std::runtime_error(std::string("expected '") + expected + "'");
+    }
+    ++position_;
+  }
+
+  void skipWhitespace() {
+    while (!isAtEnd() && std::isspace(static_cast<unsigned char>(input_[position_]))) {
+      ++position_;
+    }
+  }
+
+  bool isAtEnd() const {
+    return position_ >= input_.size();
+  }
+
+  std::string_view input_;
+  std::size_t position_ = 0;
+};
+
+}  // namespace
 
 
 namespace ORB_SLAM2
@@ -48,26 +348,28 @@ DetectionsFromFile::DetectionsFromFile(const std::string& filename, const std::v
         std::cerr << "Warning failed to open file: " << filename << std::endl;
         return ;
     }
-    fin >> data_;
 
-    for (auto& frame : data_)
-    {
-        std::string name = frame["file_name"].get<std::string>();
-        name = fs::path(name).filename();
-        frame_names_.push_back(name);
-
-        std::vector<Detection::Ptr> detections;
-        for (auto& d : frame["detections"])
+    const std::string contents((std::istreambuf_iterator<char>(fin)), std::istreambuf_iterator<char>());
+    try {
+        const auto frames = DetectionJsonParser(contents).parseFrames();
+        for (const auto& frame : frames)
         {
-            double score = d["detection_score"].get<double>();
-            unsigned int cat = d["category_id"].get<unsigned int>();
-            if (to_ignore.find(cat) != to_ignore.end())
-                continue;
-            auto bb = d["bbox"];
-            Eigen::Vector4d bbox(bb[0], bb[1], bb[2], bb[3]);
-            detections.push_back(std::shared_ptr<Detection>(new Detection(cat, score, bbox)));
+            std::string name = fs::path(frame.file_name).filename();
+            frame_names_.push_back(name);
+
+            std::vector<Detection::Ptr> detections;
+            detections.reserve(frame.detections.size());
+            for (const auto& det : frame.detections)
+            {
+                if (to_ignore.find(det.category_id) != to_ignore.end())
+                    continue;
+                detections.push_back(std::shared_ptr<Detection>(new Detection(det.category_id, det.score, det.bbox)));
+            }
+            detections_[name] = detections;
         }
-        detections_[name] = detections;
+    } catch (const std::exception& exc) {
+        std::cerr << "Warning failed to parse detections file " << filename << ": "
+                  << exc.what() << std::endl;
     }
 }
 
@@ -80,7 +382,7 @@ std::vector<Detection::Ptr> DetectionsFromFile::detect(const std::string& name) 
     return detections_.at(basename);
 }
 std::vector<Detection::Ptr> DetectionsFromFile::detect(unsigned int idx) const {
-    if (idx < 0 || idx >= frame_names_.size()) {
+    if (idx >= frame_names_.size()) {
         std::cerr << "Warning invalid index: " << idx << std::endl;
         return {};
     }
