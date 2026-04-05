@@ -17,312 +17,213 @@
 * along with OA-SLAM. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <algorithm>
+#include <chrono>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 
-#include<iostream>
-#include<algorithm>
-#include<fstream>
-#include<chrono>
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/videoio.hpp>
 
-#include<opencv2/core/core.hpp>
-#include <experimental/filesystem>
-
-#include <System.h>
-#include "Osmap.h"
 #include <nlohmann/json.hpp>
-#include "Utils.h"
+
+#include "oaslam/app/module_factories.h"
+#include "oaslam/app/slam_session.h"
+#include "src/common/file_utils.h"
 
 using json = nlohmann::json;
-namespace fs = std::experimental::filesystem;
 
-using namespace std;
+namespace fs = std::filesystem;
 
-void LoadImages(const string &strFile, vector<string> &vstrImageFilenames,
-                vector<double> &vTimestamps);
+namespace {
 
-int main(int argc, char **argv)
-{
-    srand(time(nullptr));
-    std::cout << "C++ version: " << __cplusplus << std::endl;
-
-    if(argc != 10)
-    {
-        cerr << endl << "Usage:\n"
-                        " ./oa-slam_localization\n"
-                        "      vocabulary_file\n"
-                        "      camera_file\n"
-                        "      path_to_image_sequence (.txt file listing the images or a folder with rgb.txt)\n"
-                        "      detections_file (.json file with detections or .onnx yolov5 weights)\n"
-                        "      categories_to_ignore_file (file containing the categories to ignore (one category_id per line))\n"
-                        "      map_file (.yaml)\n"
-                        "      relocalization_mode ('points', 'objects' or 'points+objects')\n"
-                        "      output_name \n"
-                        "      force_relocalization_on_each_frame (0 or 1)\n";
-        return 1;
-    }
-
-    // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    std::string vocabulary_file = string(argv[1]);
-    std::string parameters_file = string(argv[2]);
-    string path_to_images = string(argv[3]);
-    std::string detections_file(argv[4]);
-    std::string categories_to_ignore_file(argv[5]);
-    string map_file = string(argv[6]);
-    string reloc_mode = string(argv[7]);
-    string output_name = string(argv[8]);
-    bool force_reloc = std::stoi(argv[9]);
-
-
-    // possible to pass 'webcam_X' where 'X' is the webcam id
-    bool use_webcam = false;
-    int webcam_id = 0;
-    if (path_to_images.size() >= 6 && path_to_images.substr(0, 6) == "webcam") {
-        use_webcam = true;
-        if (path_to_images.size() > 7) {
-            webcam_id = std::stoi(path_to_images.substr(7));
-        }
-    }
-
-    // Possible to pass a file listing images instead of a folder containing a file rgb.txt
-    std::string image_list_file = "rgb.txt";
-    int nn = path_to_images.size();
-    if (!use_webcam && get_file_extension(path_to_images) == "txt") {
-        int pos = path_to_images.find_last_of('/');
-        image_list_file = path_to_images.substr(pos+1);
-        path_to_images = path_to_images.substr(0, pos+1);
-    }
-
-    if (!use_webcam && path_to_images.back() != '/')
-        path_to_images += "/";
-
-    string output_folder = output_name;
-    if (output_folder.back() != '/')
-        output_folder += "/";
-    fs::create_directories(output_folder);
-
-    // Get map folder absolute path
-    int l = map_file.find_last_of('/') + 1;
-    std::string map_folder = map_file.substr(0, l);
-    if (map_folder[0] != '/') {
-        fs::path map_folder_abs = fs::current_path() / map_folder;
-        map_folder = map_folder_abs.string();
-    }
-
-    // Load categories to ignore
-    std::ifstream fin(categories_to_ignore_file);
-    vector<int> classes_to_ignore;
-    if (!fin.is_open()) {
-        std::cout << "Warning !! Failed to open the file with ignore classes. No class will be ignore.\n";
-    } else {
-        int cat;
-        while (fin >> cat) {
-            std::cout << "Ignore category: " << cat << "\n";
-            classes_to_ignore.push_back(cat);
-        }
-    }
-
-    // Load object detections
-    auto extension = get_file_extension(detections_file);
-    std::shared_ptr<ORB_SLAM2::ImageDetectionsManager> detector = nullptr;
-    bool detect_from_file = false;
-    if (extension == "onnx") { // load network
-        detector = std::make_shared<ORB_SLAM2::ObjectDetector>(detections_file, classes_to_ignore);
-        detect_from_file = false;
-    } else if (extension == "json") { // load from external detections file
-        detector = std::make_shared<ORB_SLAM2::DetectionsFromFile>(detections_file, classes_to_ignore);
-        detect_from_file = true;
-    } else {
-        std::cout << "Invalid detection file. It should be .json or .onnx\n"
-                      "No detections will be obtained.\n";
-    }
-
-
-    ORB_SLAM2::enumRelocalizationMode relocalization_mode = ORB_SLAM2::RELOC_POINTS;
-    if (reloc_mode == string("points"))
-        relocalization_mode = ORB_SLAM2::RELOC_POINTS;
-    else if (reloc_mode == std::string("objects"))
-        relocalization_mode = ORB_SLAM2::RELOC_OBJECTS;
-    else if (reloc_mode == std::string("points+objects"))
-        relocalization_mode = ORB_SLAM2::RELOC_OBJECTS_POINTS;
-    else {
-        std::cerr << "Error: Invalid parameter for relocalization mode. "
-                     "It should be 'points', 'objects' or 'points+objects'.\n";
-        return 1;
-    }
-
-    // Load images
-    cv::VideoCapture cap;
-    vector<string> vstrImageFilenames;
-    vector<double> vTimestamps;
-    int nImages = 10000;
-    if (!use_webcam) {
-        string strFile = path_to_images + image_list_file;
-        LoadImages(strFile, vstrImageFilenames, vTimestamps);
-        nImages = vstrImageFilenames.size();
-    } else {
-        cap.open(0);
-        std::cout << "Open webcam" << std::endl;
-    }
-
-    ORB_SLAM2::System SLAM(vocabulary_file, parameters_file, ORB_SLAM2::System::MONOCULAR, true, true, 0);
-    SLAM.SetRelocalizationMode(relocalization_mode);
-    SLAM.map_folder = map_folder;
-
-    // Vector for tracking time statistics
-    vector<float> vTimesTrack;
-    vTimesTrack.reserve(nImages);
-
-    cout << endl << "-------" << endl;
-    cout << "Start processing sequence ..." << endl;
-    cout << "Images in the sequence: " << nImages << endl << endl;
-
-    ORB_SLAM2::Osmap osmap = ORB_SLAM2::Osmap(SLAM);
-    std::cout << "Start loading map" << std::endl;
-    osmap.mapLoad(map_file);
-    std::cout << "End of loading map" << std::endl;
-    SLAM.ActivateLocalizationMode();
-
-    // SLAM.remove_nth_object_by_cat(71, 2); // remove some objects from the loaded map
-
-    // Main loop
-    cv::Mat im;
-    std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> poses;
-    poses.reserve(nImages);
-    std::vector<std::string> filenames;
-    filenames.reserve(nImages);
-    std::vector<double> reloc_times;
-    reloc_times.reserve(nImages);
-    std::vector<bool> reloc_status;
-    reloc_status.reserve(nImages);
-    int ni = 0;
-    while (1)
-    {
-        std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-        std::string filename;
-        if (use_webcam) {
-            cap >> im;  // get image from webcam
-            filename = "frame_" + std::to_string(ni) + ".png";
-        }
-        else
-        {
-            filename = path_to_images + vstrImageFilenames[ni];
-            im = cv::imread(filename, cv::IMREAD_UNCHANGED);  // read image from disk
-        }
-        double tframe = ni < vTimestamps.size() ? vTimestamps[ni] : std::time(nullptr);
-        if(im.empty())
-        {
-            cerr << endl << "Failed to load image: "
-                 << filename << endl;
-            return 1;
-        }
-        filenames.push_back(filename);
-
-        // Get object detections
-        std::vector<ORB_SLAM2::Detection::Ptr> detections;
-        if (detector) {
-            if (detect_from_file)
-                detections = detector->detect(filename); // from detections file
-            else
-                detections = detector->detect(im);  // from neural network
-        }
-
-        // Pass the image and detections to the SLAM system
-        cv::Mat m = SLAM.TrackMonocular(im, tframe, detections, force_reloc);
-        reloc_times.push_back(SLAM.relocalization_duration);
-        reloc_status.push_back(SLAM.relocalization_status);
-
-        if (m.rows && m.cols)
-            poses[ni] = ORB_SLAM2::cvToEigenMatrix<double, float, 4, 4>(m);
-        else
-            poses.push_back(Eigen::Matrix4d::Identity());
-
-        std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-        double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
-        vTimesTrack.push_back(ttrack);
-
-        if (SLAM.ShouldQuit())
-            break;
-
-        ++ni;
-        if (ni >= nImages)
-            break;
-    }
-
-    // Stop all threads
-    SLAM.Shutdown();
-  
-    // Save camera trajectory
-    json json_data;
-    for (size_t i = 0; i < poses.size(); ++i)
-    {
-        Eigen::Matrix4d m = poses[i];
-        json R({{m(0, 0), m(0, 1), m(0, 2)},
-                {m(1, 0), m(1, 1), m(1, 2)},
-                {m(2, 0), m(2, 1), m(2, 2)}});
-        json t({m(0, 3), m(1, 3), m(2, 3)});
-        json image_data;
-        image_data["file_name"] = filenames[i];
-        image_data["R"] = R;
-        image_data["t"] = t;
-        json_data.push_back(image_data);
-    }
-
-    std::ofstream json_file(output_folder + "camera_poses_" + output_name + ".json");
-    json_file << json_data;
-    json_file.close();
-    std::cout << "Saved " << poses.size() << " poses.\n";
-
-
-    // Relocalization time statistics
-    std::ofstream file_times(output_folder + "relocalization_times.txt");
-    for (int i = 0; i < reloc_times.size(); ++i) {
-        file_times << reloc_times[i] << " " << (int)reloc_status[i] << "\n";
-    }
-    file_times.close();
-
-    // Tracking time statistics
-    sort(vTimesTrack.begin(),vTimesTrack.end());
-    float totaltime = 0;
-    for(int ni=0; ni<nImages; ni++)
-    {
-        totaltime+=vTimesTrack[ni];
-    }
-    cout << "-------" << endl << endl;
-    cout << "median tracking time: " << vTimesTrack[nImages/2] << endl;
-    cout << "mean tracking time: " << totaltime/nImages << endl;
-
-    return 0;
+oaslam::RelocalizationMode ParseRelocalizationMode(const std::string& value) {
+  if (value == "objects") {
+    return oaslam::RelocalizationMode::Objects;
+  }
+  if (value == "points+objects") {
+    return oaslam::RelocalizationMode::PointsAndObjects;
+  }
+  return oaslam::RelocalizationMode::Points;
 }
 
-void LoadImages(const string &strFile, vector<string> &vstrImageFilenames, vector<double> &vTimestamps)
-{
-    ifstream f;
-    f.open(strFile.c_str());
+oaslam::ObservationSourceKind ParseObservationSourceKind(const std::string& source) {
+  const auto extension = oaslam::GetFileExtension(source);
+  if (extension == "json") {
+    return oaslam::ObservationSourceKind::File;
+  }
+  if (extension == "onnx") {
+    return oaslam::ObservationSourceKind::Onnx;
+  }
+  return oaslam::ObservationSourceKind::None;
+}
 
-    string s0;
-    double t = 0;
-    int n = 0;
-    bool found_timestamps = false;
-    while(!f.eof())
-    {
-        string s;
-        getline(f,s);
-        if(!s.empty() && s[0] != '#')
-        {
-            stringstream ss;
-            ss << s;
-            string sRGB;
-            if (ss.str().find(' ') != std::string::npos) {
-                ss >> t;
-                found_timestamps = true;
-            }
-            ss >> sRGB;
+}  // namespace
 
-            vTimestamps.push_back(t);
-            vstrImageFilenames.push_back(sRGB);
-            if (!found_timestamps)
-                t += 0.033;
-            ++n;
-        }
+int main(int argc, char** argv) {
+  if (argc != 10) {
+    std::cerr << "\nUsage:\n"
+              << " ./oa-slam_localization\n"
+              << "      vocabulary_file\n"
+              << "      camera_file\n"
+              << "      path_to_image_sequence (.txt file listing the images or a folder with rgb.txt)\n"
+              << "      detections_file (.json file with detections or .onnx yolov5 weights)\n"
+              << "      categories_to_ignore_file\n"
+              << "      session_root (directory created by oa-slam)\n"
+              << "      relocalization_mode ('points', 'objects' or 'points+objects')\n"
+              << "      output_name\n"
+              << "      force_relocalization_on_each_frame (0 or 1)\n";
+    return 1;
+  }
+
+  const std::string vocabulary_file = argv[1];
+  const std::string camera_file = argv[2];
+  std::string path_to_images = argv[3];
+  const std::string detections_file = argv[4];
+  const std::string ignored_categories_file = argv[5];
+  const fs::path session_root = argv[6];
+  const std::string relocalization_mode_value = argv[7];
+  const std::string output_name = argv[8];
+  const bool force_relocalization = std::stoi(argv[9]) != 0;
+
+  const bool use_webcam = oaslam::IsWebcamSource(path_to_images);
+  const int webcam_id = oaslam::ParseWebcamId(path_to_images);
+
+  std::string image_list_file = "rgb.txt";
+  if (!use_webcam && oaslam::GetFileExtension(path_to_images) == "txt") {
+    const auto split = path_to_images.find_last_of('/');
+    image_list_file = path_to_images.substr(split + 1);
+    path_to_images = path_to_images.substr(0, split + 1);
+  }
+
+  if (!use_webcam && !path_to_images.empty() && path_to_images.back() != '/') {
+    path_to_images += "/";
+  }
+
+  fs::path output_folder = output_name;
+  fs::create_directories(output_folder);
+
+  oaslam::SessionConfig session_config;
+  session_config.initial_mode = oaslam::SessionMode::Localization;
+  session_config.slam_backend.vocabulary_file = vocabulary_file;
+  session_config.slam_backend.camera_settings_file = camera_file;
+  session_config.slam_backend.use_viewer = true;
+  session_config.slam_backend.use_ar_viewer = false;
+  session_config.slam_backend.use_objects_in_local_ba = 0;
+  session_config.slam_backend.force_relocalization = force_relocalization;
+  session_config.slam_backend.relocalization_mode =
+      ParseRelocalizationMode(relocalization_mode_value);
+  session_config.observation_source.kind = ParseObservationSourceKind(detections_file);
+  session_config.observation_source.source_path = detections_file;
+  session_config.observation_source.ignored_categories =
+      oaslam::LoadIgnoredCategories(ignored_categories_file);
+  session_config.visualizer.enabled = true;
+  session_config.agent_gateway.enabled = true;
+
+  oaslam::SlamSession session(session_config, oaslam::CreateDefaultModules(session_config));
+  session.loadState(session_root);
+  session.setMode(oaslam::SessionMode::Localization);
+
+  cv::VideoCapture capture;
+  std::vector<std::string> image_filenames;
+  std::vector<double> timestamps;
+  std::size_t frame_count = 10000;
+  if (!use_webcam) {
+    oaslam::LoadImageSequenceList(path_to_images + image_list_file, &image_filenames, &timestamps);
+    frame_count = image_filenames.size();
+  } else if (!capture.open(webcam_id)) {
+    std::cerr << "Failed to open webcam: " << webcam_id << "\n";
+    session.shutdown();
+    return 1;
+  }
+
+  std::vector<float> tracking_times;
+  std::vector<double> relocalization_times;
+  std::vector<bool> relocalization_status;
+  std::vector<cv::Matx44d> poses;
+  std::vector<std::string> filenames;
+  tracking_times.reserve(frame_count);
+  relocalization_times.reserve(frame_count);
+  relocalization_status.reserve(frame_count);
+  poses.reserve(frame_count);
+  filenames.reserve(frame_count);
+
+  for (std::size_t index = 0; index < frame_count; ++index) {
+    const auto frame_start = std::chrono::steady_clock::now();
+
+    cv::Mat image;
+    std::string filename;
+    if (use_webcam) {
+      capture >> image;
+      filename = "frame_" + std::to_string(index) + ".png";
+    } else {
+      filename = path_to_images + image_filenames[index];
+      image = cv::imread(filename, cv::IMREAD_UNCHANGED);
     }
-    f.close();
+
+    if (image.empty()) {
+      std::cerr << "Failed to load image: " << filename << "\n";
+      session.shutdown();
+      return 1;
+    }
+
+    const double timestamp =
+        index < timestamps.size() ? timestamps[index] : static_cast<double>(std::time(nullptr));
+    filenames.push_back(filename);
+
+    oaslam::FramePacket frame;
+    frame.frame_id = index;
+    frame.timestamp = timestamp;
+    frame.camera_id = "mono0";
+    frame.image = image;
+
+    const oaslam::SessionFrameResult result = session.processFrame(frame);
+    poses.push_back(result.tracking.has_pose ? result.tracking.T_world_camera : cv::Matx44d::eye());
+    relocalization_times.push_back(result.tracking.relocalization_duration_ms);
+    relocalization_status.push_back(result.tracking.relocalization_success);
+
+    const auto frame_end = std::chrono::steady_clock::now();
+    tracking_times.push_back(
+        std::chrono::duration_cast<std::chrono::duration<float>>(frame_end - frame_start).count());
+
+    if (result.quit_requested) {
+      break;
+    }
+  }
+
+  json json_data;
+  for (std::size_t i = 0; i < poses.size(); ++i) {
+    const auto& pose = poses[i];
+    json rotation({{pose(0, 0), pose(0, 1), pose(0, 2)},
+                   {pose(1, 0), pose(1, 1), pose(1, 2)},
+                   {pose(2, 0), pose(2, 1), pose(2, 2)}});
+    json translation({pose(0, 3), pose(1, 3), pose(2, 3)});
+    json_data.push_back({{"file_name", filenames[i]}, {"R", rotation}, {"t", translation}});
+  }
+
+  std::ofstream json_file(output_folder / ("camera_poses_" + output_name + ".json"));
+  json_file << json_data;
+
+  std::ofstream relocalization_file(output_folder / "relocalization_times.txt");
+  for (std::size_t i = 0; i < relocalization_times.size(); ++i) {
+    relocalization_file << relocalization_times[i] << " "
+                        << static_cast<int>(relocalization_status[i]) << "\n";
+  }
+
+  session.shutdown();
+
+  if (!tracking_times.empty()) {
+    std::sort(tracking_times.begin(), tracking_times.end());
+    float total_time = 0.0F;
+    for (const float value : tracking_times) {
+      total_time += value;
+    }
+    std::cout << "median tracking time: " << tracking_times[tracking_times.size() / 2] << "\n";
+    std::cout << "mean tracking time: " << total_time / tracking_times.size() << "\n";
+  }
+
+  return 0;
 }
