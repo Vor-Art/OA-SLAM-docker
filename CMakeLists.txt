@@ -311,6 +311,7 @@ target_include_directories(oaslam_orbslam3_internal
     ${ORBSLAM3_INTERNAL_INCLUDE_DIR}/CameraModels
   PRIVATE
     ${PROJECT_SOURCE_DIR}
+    ${ORBSLAM3_INTERNAL_DIR}
     ${EIGEN3_INCLUDE_DIR}
     ${Pangolin_INCLUDE_DIRS}
     ${ORBSLAM3_SOPHUS_INCLUDE_DIR}
@@ -439,6 +440,9 @@ target_link_libraries(oaslam_sdk INTERFACE
 add_executable(oa-slam examples/oa-slam.cc)
 target_link_libraries(oa-slam PRIVATE oaslam_sdk)
 
+# ---------------------------------------------------------------------------
+# Installation
+# ---------------------------------------------------------------------------
 set(_OASLAM_INSTALL_TARGETS
   oaslam_core
   oaslam_ports
@@ -463,19 +467,62 @@ if(BUILD_ORBSLAM3)
 endif()
 
 install(TARGETS ${_OASLAM_INSTALL_TARGETS}
-  EXPORT oaslamTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 install(DIRECTORY include/oaslam DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+# Generate a lightweight package config so that the ROS 2 wrapper (and any
+# other downstream project) can do  find_package(oaslam CONFIG REQUIRED)
+# and link against oaslam::oaslam_sdk.
+# We deliberately avoid install(EXPORT …) because the many internal static
+# libraries carry source-tree absolute paths in their INTERFACE properties
+# which CMake's export validation rejects.
+
+# Write the template with @PACKAGE_INIT@ for configure_package_config_file
+# and hard-coded relative paths for lib/include dirs.
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oaslamConfig.cmake.in
+[=[
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(OpenCV REQUIRED)
+find_dependency(Eigen3 REQUIRED)
+find_dependency(Pangolin REQUIRED)
+find_dependency(dlib REQUIRED)
+
+# Create an IMPORTED INTERFACE target that downstream can link against.
+if(NOT TARGET oaslam::oaslam_sdk)
+  add_library(oaslam::oaslam_sdk INTERFACE IMPORTED)
+
+  # Collect every static/shared library we installed
+  file(GLOB _oaslam_libs "${CMAKE_CURRENT_LIST_DIR}/../../lib*.a")
+  file(GLOB _oaslam_shared "${CMAKE_CURRENT_LIST_DIR}/../../lib*.so")
+  list(APPEND _oaslam_all_libs ${_oaslam_libs} ${_oaslam_shared})
+
+  get_filename_component(_oaslam_prefix "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+
+  set_target_properties(oaslam::oaslam_sdk PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${_oaslam_prefix}/include"
+    INTERFACE_LINK_LIBRARIES "${_oaslam_all_libs};Eigen3::Eigen;${OpenCV_LIBS};${Pangolin_LIBRARIES};dlib::dlib;stdc++fs"
+  )
+  unset(_oaslam_libs)
+  unset(_oaslam_shared)
+  unset(_oaslam_all_libs)
+  unset(_oaslam_prefix)
+endif()
+]=]
+)
+
 configure_package_config_file(
-  ${PROJECT_SOURCE_DIR}/cmake/oaslamConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/oaslamConfig.cmake.in
   ${CMAKE_CURRENT_BINARY_DIR}/oaslamConfig.cmake
   INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/oaslam
+)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/oaslamConfig.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/oaslam
 )
 
 write_basic_package_version_file(
@@ -483,17 +530,6 @@ write_basic_package_version_file(
   VERSION ${PROJECT_VERSION}
   COMPATIBILITY SameMajorVersion
 )
-
-install(
-  FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/oaslamConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/oaslamConfigVersion.cmake
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/oaslam
-)
-
-install(
-  EXPORT oaslamTargets
-  FILE oaslamTargets.cmake
-  NAMESPACE oaslam::
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/oaslamConfigVersion.cmake
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/oaslam
 )

@@ -1,6 +1,7 @@
 x-oaslam-build: &oaslam-build
   context: ..
   dockerfile: docker/Dockerfile
+  pull: false
   args:
     CUDA_VERSION: ${CUDA_VERSION}
     CUDNN_FLAVOR: ${CUDNN_FLAVOR}

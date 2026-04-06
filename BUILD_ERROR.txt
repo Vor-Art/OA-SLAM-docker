@@ -1,0 +1,261 @@
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h: At global scope:
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:81:62: error: incomplete type ‘ORB_SLAM3::Detection’ used in nested name specifier
+#27 144.9    81 |                                 const std::vector<Detection::Ptr>& detections = {}, bool force_relocalize = false);
+#27 144.9       |                                                              ^~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:81:65: error: template argument 1 is invalid
+#27 144.9    81 |                                 const std::vector<Detection::Ptr>& detections = {}, bool force_relocalize = false);
+#27 144.9       |                                                                 ^
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:81:65: error: template argument 2 is invalid
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:83:67: error: incomplete type ‘ORB_SLAM3::Detection’ used in nested name specifier
+#27 144.9    83 |                                      const std::vector<Detection::Ptr>& detections = {}, bool force_relocalize = false);
+#27 144.9       |                                                                   ^~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:83:70: error: template argument 1 is invalid
+#27 144.9    83 |                                      const std::vector<Detection::Ptr>& detections = {}, bool force_relocalize = false);
+#27 144.9       |                                                                      ^
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:83:70: error: template argument 2 is invalid
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:125:28: error: incomplete type ‘ORB_SLAM3::Detection’ used in nested name specifier
+#27 144.9   125 |     std::vector<Detection::Ptr> GetCurrentFrameDetections() {
+#27 144.9       |                            ^~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:125:31: error: template argument 1 is invalid
+#27 144.9   125 |     std::vector<Detection::Ptr> GetCurrentFrameDetections() {
+#27 144.9       |                               ^
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:125:31: error: template argument 2 is invalid
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:129:28: error: incomplete type ‘ORB_SLAM3::Detection’ used in nested name specifier
+#27 144.9   129 |     std::vector<Detection::Ptr> GetCurrentFrameGoodDetections() {
+#27 144.9       |                            ^~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:129:31: error: template argument 1 is invalid
+#27 144.9   129 |     std::vector<Detection::Ptr> GetCurrentFrameGoodDetections() {
+#27 144.9       |                               ^
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:129:31: error: template argument 2 is invalid
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:390:28: error: incomplete type ‘ORB_SLAM3::Detection’ used in nested name specifier
+#27 144.9   390 |     std::vector<Detection::Ptr> current_frame_detections_;
+#27 144.9       |                            ^~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:390:31: error: template argument 1 is invalid
+#27 144.9   390 |     std::vector<Detection::Ptr> current_frame_detections_;
+#27 144.9       |                               ^
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:390:31: error: template argument 2 is invalid
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:391:28: error: incomplete type ‘ORB_SLAM3::Detection’ used in nested name specifier
+#27 144.9   391 |     std::vector<Detection::Ptr> current_frame_good_detections_;
+#27 144.9       |                            ^~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:391:31: error: template argument 1 is invalid
+#27 144.9   391 |     std::vector<Detection::Ptr> current_frame_good_detections_;
+#27 144.9       |                               ^
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:391:31: error: template argument 2 is invalid
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc: In member function ‘Sophus::SE3f ORB_SLAM3::System::TrackMonocular(const cv::Mat&, const double&, const std::vector<std::shared_ptr<ORB_SLAM3::Detection> >&, bool, const std::vector<ORB_SLAM3::IMU::Point>&, std::string)’:
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:516:75: error: cannot convert ‘const std::vector<std::shared_ptr<ORB_SLAM3::Detection> >’ to ‘std::string’ {aka ‘std::__cxx11::basic_string<char>’}
+#27 144.9   516 |     Sophus::SE3f Tcw = mpTracker->GrabImageMonocular(imToFeed, timestamp, detections, force_relocalize, filename);
+#27 144.9       |                                                                           ^~~~~~~~~~
+#27 144.9       |                                                                           |
+#27 144.9       |                                                                           const std::vector<std::shared_ptr<ORB_SLAM3::Detection> >
+#27 144.9 In file included from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/System.h:51,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:41:
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:82:88: note:   initializing argument 3 of ‘Sophus::SE3f ORB_SLAM3::Tracking::GrabImageMonocular(const cv::Mat&, const double&, std::string, const int&, bool)’
+#27 144.9    82 |     Sophus::SE3f GrabImageMonocular(const cv::Mat &im, const double &timestamp, string filename,
+#27 144.9       |                                                                                 ~~~~~~~^~~~~~~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc: In member function ‘void ORB_SLAM3::System::SaveTrajectoryEuRoC(const string&)’:
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:737:43: warning: comparison of integer expressions of different signedness: ‘std::vector<ORB_SLAM3::KeyFrame*>::size_type’ {aka ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+#27 144.9   737 |         if(pMap->GetAllKeyFrames().size() > numMaxKFs)
+#27 144.9       |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc: In member function ‘void ORB_SLAM3::System::SaveTrajectoryEuRoC(const string&, ORB_SLAM3::Map*)’:
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:847:9: warning: unused variable ‘numMaxKFs’ [-Wunused-variable]
+#27 144.9   847 |     int numMaxKFs = 0;
+#27 144.9       |         ^~~~~~~~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc: In member function ‘void ORB_SLAM3::System::SaveKeyFrameTrajectoryEuRoC(const string&)’:
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1124:51: warning: comparison of integer expressions of different signedness: ‘std::vector<ORB_SLAM3::KeyFrame*>::size_type’ {aka ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+#27 144.9  1124 |         if(pMap && pMap->GetAllKeyFrames().size() > numMaxKFs)
+#27 144.9       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc: In member function ‘void ORB_SLAM3::System::remove_nth_object_by_cat(int, int)’:
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1693:44: warning: comparison of integer expressions of different signedness: ‘unsigned int’ and ‘int’ [-Wsign-compare]
+#27 144.9  1693 |         if (o->GetTrack()->GetCategoryId() == cat) {
+#27 144.9       |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~
+#27 144.9 In file included from /usr/include/boost/serialization/serialization.hpp:43,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/SerializationUtils.h:22,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/ImuTypes.h:32,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Frame.h:30,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/KeyFrame.h:28,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h:23,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/FrameDrawer.h:24,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Viewer.h:23,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Tracking.h:26,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/System.h:51,
+#27 144.9                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:41:
+#27 144.9 /usr/include/boost/serialization/access.hpp: In instantiation of ‘static void boost::serialization::access::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::text_oarchive; T = DBoW2::BowVector]’:
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:68:22:   required from ‘void boost::serialization::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::text_oarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:118:14:   required from ‘void boost::serialization::serialize_adl(Archive&, T&, unsigned int) [with Archive = boost::archive::text_oarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:153:40:   required from ‘void boost::archive::detail::oserializer<Archive, T>::save_object_data(boost::archive::detail::basic_oarchive&, const void*) const [with Archive = boost::archive::text_oarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:258:27:   required from ‘static void boost::archive::detail::save_non_pointer_type<Archive>::save_standard::invoke(Archive&, const T&) [with T = DBoW2::BowVector; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:315:22:   required from ‘static void boost::archive::detail::save_non_pointer_type<Archive>::invoke(Archive&, const T&) [with T = DBoW2::BowVector; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:539:18:   [ skipping 102 instantiation contexts, use -ftemplate-backtrace-limit=0 to disable ]
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:480:13:   required from ‘static void boost::archive::detail::save_pointer_type<Archive>::invoke(Archive&, TPtr) [with TPtr = ORB_SLAM3::Atlas*; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:539:18:   required from ‘void boost::archive::save(Archive&, T&) [with Archive = boost::archive::text_oarchive; T = ORB_SLAM3::Atlas* const]’
+#27 144.9 /usr/include/boost/archive/detail/common_oarchive.hpp:71:22:   required from ‘void boost::archive::detail::common_oarchive<Archive>::save_override(T&) [with T = ORB_SLAM3::Atlas* const; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/basic_text_oarchive.hpp:83:52:   required from ‘void boost::archive::basic_text_oarchive<Archive>::save_override(T&) [with T = ORB_SLAM3::Atlas* const; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/interface_oarchive.hpp:70:36:   required from ‘Archive& boost::archive::detail::interface_oarchive<Archive>::operator<<(const T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_oarchive]’
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1486:19:   required from here
+#27 144.9 /usr/include/boost/serialization/access.hpp:116:11: error: ‘class DBoW2::BowVector’ has no member named ‘serialize’; did you mean ‘normalize’?
+#27 144.9   116 |         t.serialize(ar, file_version);
+#27 144.9       |         ~~^~~~~~~~~
+#27 144.9       |         normalize
+#27 144.9 /usr/include/boost/serialization/access.hpp: In instantiation of ‘static void boost::serialization::access::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::text_oarchive; T = DBoW2::FeatureVector]’:
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:68:22:   required from ‘void boost::serialization::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::text_oarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:118:14:   required from ‘void boost::serialization::serialize_adl(Archive&, T&, unsigned int) [with Archive = boost::archive::text_oarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:153:40:   required from ‘void boost::archive::detail::oserializer<Archive, T>::save_object_data(boost::archive::detail::basic_oarchive&, const void*) const [with Archive = boost::archive::text_oarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:258:27:   required from ‘static void boost::archive::detail::save_non_pointer_type<Archive>::save_standard::invoke(Archive&, const T&) [with T = DBoW2::FeatureVector; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:315:22:   required from ‘static void boost::archive::detail::save_non_pointer_type<Archive>::invoke(Archive&, const T&) [with T = DBoW2::FeatureVector; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:539:18:   [ skipping 102 instantiation contexts, use -ftemplate-backtrace-limit=0 to disable ]
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:480:13:   required from ‘static void boost::archive::detail::save_pointer_type<Archive>::invoke(Archive&, TPtr) [with TPtr = ORB_SLAM3::Atlas*; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:539:18:   required from ‘void boost::archive::save(Archive&, T&) [with Archive = boost::archive::text_oarchive; T = ORB_SLAM3::Atlas* const]’
+#27 144.9 /usr/include/boost/archive/detail/common_oarchive.hpp:71:22:   required from ‘void boost::archive::detail::common_oarchive<Archive>::save_override(T&) [with T = ORB_SLAM3::Atlas* const; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/basic_text_oarchive.hpp:83:52:   required from ‘void boost::archive::basic_text_oarchive<Archive>::save_override(T&) [with T = ORB_SLAM3::Atlas* const; Archive = boost::archive::text_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/interface_oarchive.hpp:70:36:   required from ‘Archive& boost::archive::detail::interface_oarchive<Archive>::operator<<(const T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_oarchive]’
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1486:19:   required from here
+#27 144.9 /usr/include/boost/serialization/access.hpp:116:11: error: ‘class DBoW2::FeatureVector’ has no member named ‘serialize’
+#27 144.9 /usr/include/boost/serialization/access.hpp: In instantiation of ‘static void boost::serialization::access::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_oarchive; T = DBoW2::BowVector]’:
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:68:22:   required from ‘void boost::serialization::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_oarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:118:14:   required from ‘void boost::serialization::serialize_adl(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_oarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:153:40:   required from ‘void boost::archive::detail::oserializer<Archive, T>::save_object_data(boost::archive::detail::basic_oarchive&, const void*) const [with Archive = boost::archive::binary_oarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:258:27:   required from ‘static void boost::archive::detail::save_non_pointer_type<Archive>::save_standard::invoke(Archive&, const T&) [with T = DBoW2::BowVector; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:315:22:   required from ‘static void boost::archive::detail::save_non_pointer_type<Archive>::invoke(Archive&, const T&) [with T = DBoW2::BowVector; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:539:18:   [ skipping 110 instantiation contexts, use -ftemplate-backtrace-limit=0 to disable ]
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:539:18:   required from ‘void boost::archive::save(Archive&, T&) [with Archive = boost::archive::binary_oarchive; T = ORB_SLAM3::Atlas* const]’
+#27 144.9 /usr/include/boost/archive/detail/common_oarchive.hpp:71:22:   required from ‘void boost::archive::detail::common_oarchive<Archive>::save_override(T&) [with T = ORB_SLAM3::Atlas* const; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /usr/include/boost/archive/basic_binary_oarchive.hpp:80:50:   required from ‘void boost::archive::basic_binary_oarchive<Archive>::save_override(const T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /usr/include/boost/archive/binary_oarchive_impl.hpp:59:60:   required from ‘void boost::archive::binary_oarchive_impl<Archive, Elem, Tr>::save_override(T&) [with T = ORB_SLAM3::Atlas* const; Archive = boost::archive::binary_oarchive; Elem = char; Tr = std::char_traits<char>]’
+#27 144.9 /usr/include/boost/archive/detail/interface_oarchive.hpp:70:36:   required from ‘Archive& boost::archive::detail::interface_oarchive<Archive>::operator<<(const T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1497:19:   required from here
+#27 144.9 /usr/include/boost/serialization/access.hpp:116:11: error: ‘class DBoW2::BowVector’ has no member named ‘serialize’; did you mean ‘normalize’?
+#27 144.9   116 |         t.serialize(ar, file_version);
+#27 144.9       |         ~~^~~~~~~~~
+#27 144.9       |         normalize
+#27 144.9 /usr/include/boost/serialization/access.hpp: In instantiation of ‘static void boost::serialization::access::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_oarchive; T = DBoW2::FeatureVector]’:
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:68:22:   required from ‘void boost::serialization::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_oarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:118:14:   required from ‘void boost::serialization::serialize_adl(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_oarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:153:40:   required from ‘void boost::archive::detail::oserializer<Archive, T>::save_object_data(boost::archive::detail::basic_oarchive&, const void*) const [with Archive = boost::archive::binary_oarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:258:27:   required from ‘static void boost::archive::detail::save_non_pointer_type<Archive>::save_standard::invoke(Archive&, const T&) [with T = DBoW2::FeatureVector; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:315:22:   required from ‘static void boost::archive::detail::save_non_pointer_type<Archive>::invoke(Archive&, const T&) [with T = DBoW2::FeatureVector; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:539:18:   [ skipping 110 instantiation contexts, use -ftemplate-backtrace-limit=0 to disable ]
+#27 144.9 /usr/include/boost/archive/detail/oserializer.hpp:539:18:   required from ‘void boost::archive::save(Archive&, T&) [with Archive = boost::archive::binary_oarchive; T = ORB_SLAM3::Atlas* const]’
+#27 144.9 /usr/include/boost/archive/detail/common_oarchive.hpp:71:22:   required from ‘void boost::archive::detail::common_oarchive<Archive>::save_override(T&) [with T = ORB_SLAM3::Atlas* const; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /usr/include/boost/archive/basic_binary_oarchive.hpp:80:50:   required from ‘void boost::archive::basic_binary_oarchive<Archive>::save_override(const T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /usr/include/boost/archive/binary_oarchive_impl.hpp:59:60:   required from ‘void boost::archive::binary_oarchive_impl<Archive, Elem, Tr>::save_override(T&) [with T = ORB_SLAM3::Atlas* const; Archive = boost::archive::binary_oarchive; Elem = char; Tr = std::char_traits<char>]’
+#27 144.9 /usr/include/boost/archive/detail/interface_oarchive.hpp:70:36:   required from ‘Archive& boost::archive::detail::interface_oarchive<Archive>::operator<<(const T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_oarchive]’
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1497:19:   required from here
+#27 144.9 /usr/include/boost/serialization/access.hpp:116:11: error: ‘class DBoW2::FeatureVector’ has no member named ‘serialize’
+#27 144.9 /usr/include/boost/serialization/access.hpp: In instantiation of ‘static void boost::serialization::access::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::text_iarchive; T = DBoW2::BowVector]’:
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:68:22:   required from ‘void boost::serialization::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::text_iarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:118:14:   required from ‘void boost::serialization::serialize_adl(Archive&, T&, unsigned int) [with Archive = boost::archive::text_iarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:187:40:   required from ‘void boost::archive::detail::iserializer<Archive, T>::load_object_data(boost::archive::detail::basic_iarchive&, void*, unsigned int) const [with Archive = boost::archive::text_iarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:409:27:   required from ‘static void boost::archive::detail::load_non_pointer_type<Archive>::load_standard::invoke(Archive&, const T&) [with T = DBoW2::BowVector; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:461:22:   required from ‘static void boost::archive::detail::load_non_pointer_type<Archive>::invoke(Archive&, T&) [with T = DBoW2::BowVector; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:624:18:   [ skipping 111 instantiation contexts, use -ftemplate-backtrace-limit=0 to disable ]
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:624:18:   required from ‘void boost::archive::load(Archive&, T&) [with Archive = boost::archive::text_iarchive; T = ORB_SLAM3::Atlas*]’
+#27 144.9 /usr/include/boost/archive/detail/common_iarchive.hpp:67:22:   required from ‘void boost::archive::detail::common_iarchive<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/basic_text_iarchive.hpp:70:52:   required from ‘void boost::archive::basic_text_iarchive<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/text_iarchive.hpp:82:52:   required from ‘void boost::archive::text_iarchive_impl<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/interface_iarchive.hpp:68:36:   required from ‘Archive& boost::archive::detail::interface_iarchive<Archive>::operator>>(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_iarchive]’
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1524:15:   required from here
+#27 144.9 /usr/include/boost/serialization/access.hpp:116:11: error: ‘class DBoW2::BowVector’ has no member named ‘serialize’; did you mean ‘normalize’?
+#27 144.9   116 |         t.serialize(ar, file_version);
+#27 144.9       |         ~~^~~~~~~~~
+#27 144.9       |         normalize
+#27 144.9 /usr/include/boost/serialization/access.hpp: In instantiation of ‘static void boost::serialization::access::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::text_iarchive; T = DBoW2::FeatureVector]’:
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:68:22:   required from ‘void boost::serialization::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::text_iarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:118:14:   required from ‘void boost::serialization::serialize_adl(Archive&, T&, unsigned int) [with Archive = boost::archive::text_iarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:187:40:   required from ‘void boost::archive::detail::iserializer<Archive, T>::load_object_data(boost::archive::detail::basic_iarchive&, void*, unsigned int) const [with Archive = boost::archive::text_iarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:409:27:   required from ‘static void boost::archive::detail::load_non_pointer_type<Archive>::load_standard::invoke(Archive&, const T&) [with T = DBoW2::FeatureVector; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:461:22:   required from ‘static void boost::archive::detail::load_non_pointer_type<Archive>::invoke(Archive&, T&) [with T = DBoW2::FeatureVector; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:624:18:   [ skipping 111 instantiation contexts, use -ftemplate-backtrace-limit=0 to disable ]
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:624:18:   required from ‘void boost::archive::load(Archive&, T&) [with Archive = boost::archive::text_iarchive; T = ORB_SLAM3::Atlas*]’
+#27 144.9 /usr/include/boost/archive/detail/common_iarchive.hpp:67:22:   required from ‘void boost::archive::detail::common_iarchive<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/basic_text_iarchive.hpp:70:52:   required from ‘void boost::archive::basic_text_iarchive<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/text_iarchive.hpp:82:52:   required from ‘void boost::archive::text_iarchive_impl<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/interface_iarchive.hpp:68:36:   required from ‘Archive& boost::archive::detail::interface_iarchive<Archive>::operator>>(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::text_iarchive]’
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1524:15:   required from here
+#27 144.9 /usr/include/boost/serialization/access.hpp:116:11: error: ‘class DBoW2::FeatureVector’ has no member named ‘serialize’
+#27 144.9 /usr/include/boost/serialization/access.hpp: In instantiation of ‘static void boost::serialization::access::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_iarchive; T = DBoW2::BowVector]’:
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:68:22:   required from ‘void boost::serialization::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_iarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:118:14:   required from ‘void boost::serialization::serialize_adl(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_iarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:187:40:   required from ‘void boost::archive::detail::iserializer<Archive, T>::load_object_data(boost::archive::detail::basic_iarchive&, void*, unsigned int) const [with Archive = boost::archive::binary_iarchive; T = DBoW2::BowVector]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:409:27:   required from ‘static void boost::archive::detail::load_non_pointer_type<Archive>::load_standard::invoke(Archive&, const T&) [with T = DBoW2::BowVector; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:461:22:   required from ‘static void boost::archive::detail::load_non_pointer_type<Archive>::invoke(Archive&, T&) [with T = DBoW2::BowVector; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:624:18:   [ skipping 111 instantiation contexts, use -ftemplate-backtrace-limit=0 to disable ]
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:624:18:   required from ‘void boost::archive::load(Archive&, T&) [with Archive = boost::archive::binary_iarchive; T = ORB_SLAM3::Atlas*]’
+#27 144.9 /usr/include/boost/archive/detail/common_iarchive.hpp:67:22:   required from ‘void boost::archive::detail::common_iarchive<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /usr/include/boost/archive/basic_binary_iarchive.hpp:76:50:   required from ‘void boost::archive::basic_binary_iarchive<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /usr/include/boost/archive/binary_iarchive_impl.hpp:58:60:   required from ‘void boost::archive::binary_iarchive_impl<Archive, Elem, Tr>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_iarchive; Elem = char; Tr = std::char_traits<char>]’
+#27 144.9 /usr/include/boost/archive/detail/interface_iarchive.hpp:68:36:   required from ‘Archive& boost::archive::detail::interface_iarchive<Archive>::operator>>(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1540:15:   required from here
+#27 144.9 /usr/include/boost/serialization/access.hpp:116:11: error: ‘class DBoW2::BowVector’ has no member named ‘serialize’; did you mean ‘normalize’?
+#27 144.9   116 |         t.serialize(ar, file_version);
+#27 144.9       |         ~~^~~~~~~~~
+#27 144.9       |         normalize
+#27 144.9 /usr/include/boost/serialization/access.hpp: In instantiation of ‘static void boost::serialization::access::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_iarchive; T = DBoW2::FeatureVector]’:
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:68:22:   required from ‘void boost::serialization::serialize(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_iarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/serialization/serialization.hpp:118:14:   required from ‘void boost::serialization::serialize_adl(Archive&, T&, unsigned int) [with Archive = boost::archive::binary_iarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:187:40:   required from ‘void boost::archive::detail::iserializer<Archive, T>::load_object_data(boost::archive::detail::basic_iarchive&, void*, unsigned int) const [with Archive = boost::archive::binary_iarchive; T = DBoW2::FeatureVector]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:409:27:   required from ‘static void boost::archive::detail::load_non_pointer_type<Archive>::load_standard::invoke(Archive&, const T&) [with T = DBoW2::FeatureVector; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:461:22:   required from ‘static void boost::archive::detail::load_non_pointer_type<Archive>::invoke(Archive&, T&) [with T = DBoW2::FeatureVector; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:624:18:   [ skipping 111 instantiation contexts, use -ftemplate-backtrace-limit=0 to disable ]
+#27 144.9 /usr/include/boost/archive/detail/iserializer.hpp:624:18:   required from ‘void boost::archive::load(Archive&, T&) [with Archive = boost::archive::binary_iarchive; T = ORB_SLAM3::Atlas*]’
+#27 144.9 /usr/include/boost/archive/detail/common_iarchive.hpp:67:22:   required from ‘void boost::archive::detail::common_iarchive<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /usr/include/boost/archive/basic_binary_iarchive.hpp:76:50:   required from ‘void boost::archive::basic_binary_iarchive<Archive>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /usr/include/boost/archive/binary_iarchive_impl.hpp:58:60:   required from ‘void boost::archive::binary_iarchive_impl<Archive, Elem, Tr>::load_override(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_iarchive; Elem = char; Tr = std::char_traits<char>]’
+#27 144.9 /usr/include/boost/archive/detail/interface_iarchive.hpp:68:36:   required from ‘Archive& boost::archive::detail::interface_iarchive<Archive>::operator>>(T&) [with T = ORB_SLAM3::Atlas*; Archive = boost::archive::binary_iarchive]’
+#27 144.9 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/System.cc:1540:15:   required from here
+#27 144.9 /usr/include/boost/serialization/access.hpp:116:11: error: ‘class DBoW2::FeatureVector’ has no member named ‘serialize’
+#27 145.0 [83/142] Building CXX object CMakeFiles/oaslam_orbslam3_internal.dir/src/adapters/orbslam3/internal/src/MapPoint.cc.o
+#27 145.0 In file included from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Frame.h:30,
+#27 145.0                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/KeyFrame.h:28,
+#27 145.0                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h:23,
+#27 145.0                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc:19:
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/ImuTypes.h: In member function ‘void ORB_SLAM3::IMU::Preintegrated::printMeasurements() const’:
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/ImuTypes.h:204:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<ORB_SLAM3::IMU::Preintegrated::integrable>::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+#27 145.0   204 |         for(int i=0; i<mvMeasurements.size(); i++){
+#27 145.0       |                      ~^~~~~~~~~~~~~~~~~~~~~~
+#27 145.0 In file included from /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc:19:
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h: In constructor ‘ORB_SLAM3::MapPoint::MapPoint(const Vector3f&, ORB_SLAM3::KeyFrame*, ORB_SLAM3::Map*)’:
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h:245:11: warning: ‘ORB_SLAM3::MapPoint::mpMap’ will be initialized after [-Wreorder]
+#27 145.0   245 |      Map* mpMap;
+#27 145.0       |           ^~~~~
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h:208:18: warning:   ‘unsigned int ORB_SLAM3::MapPoint::mnOriginMapId’ [-Wreorder]
+#27 145.0   208 |     unsigned int mnOriginMapId;
+#27 145.0       |                  ^~~~~~~~~~~~~
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc:39:1: warning:   when initialized here [-Wreorder]
+#27 145.0    39 | MapPoint::MapPoint(const Eigen::Vector3f &Pos, KeyFrame *pRefKF, Map* pMap):
+#27 145.0       | ^~~~~~~~
+#27 145.0 In file included from /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc:19:
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h: In constructor ‘ORB_SLAM3::MapPoint::MapPoint(double, cv::Point2f, ORB_SLAM3::KeyFrame*, ORB_SLAM3::KeyFrame*, ORB_SLAM3::Map*)’:
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h:245:11: warning: ‘ORB_SLAM3::MapPoint::mpMap’ will be initialized after [-Wreorder]
+#27 145.0   245 |      Map* mpMap;
+#27 145.0       |           ^~~~~
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h:208:18: warning:   ‘unsigned int ORB_SLAM3::MapPoint::mnOriginMapId’ [-Wreorder]
+#27 145.0   208 |     unsigned int mnOriginMapId;
+#27 145.0       |                  ^~~~~~~~~~~~~
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc:58:1: warning:   when initialized here [-Wreorder]
+#27 145.0    58 | MapPoint::MapPoint(const double invDepth, cv::Point2f uv_init, KeyFrame* pRefKF, KeyFrame* pHostKF, Map* pMap):
+#27 145.0       | ^~~~~~~~
+#27 145.0 In file included from /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc:19:
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h: In constructor ‘ORB_SLAM3::MapPoint::MapPoint(const Vector3f&, ORB_SLAM3::Map*, ORB_SLAM3::Frame*, const int&)’:
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h:245:11: warning: ‘ORB_SLAM3::MapPoint::mpMap’ will be initialized after [-Wreorder]
+#27 145.0   245 |      Map* mpMap;
+#27 145.0       |           ^~~~~
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h:208:18: warning:   ‘unsigned int ORB_SLAM3::MapPoint::mnOriginMapId’ [-Wreorder]
+#27 145.0   208 |     unsigned int mnOriginMapId;
+#27 145.0       |                  ^~~~~~~~~~~~~
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc:78:1: warning:   when initialized here [-Wreorder]
+#27 145.0    78 | MapPoint::MapPoint(const Eigen::Vector3f &Pos, Map* pMap, Frame* pFrame, const int &idxF):
+#27 145.0       | ^~~~~~~~
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc: In member function ‘void ORB_SLAM3::MapPoint::PrintObservations()’:
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc:555:13: warning: unused variable ‘leftIndex’ [-Wunused-variable]
+#27 145.0   555 |         int leftIndex = get<0>(indexes), rightIndex = get<1>(indexes);
+#27 145.0       |             ^~~~~~~~~
+#27 145.0 /opt/OA-SLAM/src/adapters/orbslam3/internal/src/MapPoint.cc:555:42: warning: unused variable ‘rightIndex’ [-Wunused-variable]
+#27 145.0   555 |         int leftIndex = get<0>(indexes), rightIndex = get<1>(indexes);
+#27 145.0       |                                          ^~~~~~~~~~
+#27 145.2 [84/142] Building CXX object CMakeFiles/oaslam_orbslam3_internal.dir/src/adapters/orbslam3/internal/src/Atlas.cc.o
+#27 145.2 In file included from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Frame.h:30,
+#27 145.2                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/KeyFrame.h:28,
+#27 145.2                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/MapPoint.h:23,
+#27 145.2                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Map.h:23,
+#27 145.2                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/include/Atlas.h:22,
+#27 145.2                  from /opt/OA-SLAM/src/adapters/orbslam3/internal/src/Atlas.cc:19:

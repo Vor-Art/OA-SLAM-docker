@@ -29,8 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     curl \
     unzip \
-    yasm \
-    vim \
+    tree \
     software-properties-common \
     libeigen3-dev \
     libopenblas-dev \
@@ -50,18 +49,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libepoxy-dev \
     libxine2-dev \
     libpq-dev \
-    gnupg2 \
-    lsb-release \
-    python3-dev \
-    python3-pip \
-    python3-numpy \
-    python3-yaml \
-    tree \
-    && locale-gen en_US en_US.UTF-8 \
-    && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
+    libboost-dev \
+    libboost-python-dev \
     libopengl-dev \
     libgl1-mesa-dev \
     libglu1-mesa-dev \
@@ -70,17 +59,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-dev \
     libxi-dev \
     libxmu-dev \
+    gnupg2 \
+    lsb-release \
+    python3-dev \
+    python3-pip \
+    python3-numpy \
+    python3-yaml \
+    && locale-gen en_US en_US.UTF-8 \
+    && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN if [ -d /usr/local/cuda-$(echo ${CUDA_VERSION} | cut -d. -f1,2) ]; then \
-      ln -sfn /usr/local/cuda-$(echo ${CUDA_VERSION} | cut -d. -f1,2) /usr/local/cuda; \
-    fi
-
+# ROS2 repository key and source
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
       -o /usr/share/keyrings/ros-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo ${UBUNTU_CODENAME}) main" \
       > /etc/apt/sources.list.d/ros2.list
 
+# Install ROS2 packages (separate layer to cache them independently)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-ros-base \
     ros-${ROS_DISTRO}-ament-cmake \
@@ -90,11 +85,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-launch-ros \
     ros-${ROS_DISTRO}-rclcpp \
     ros-${ROS_DISTRO}-sensor-msgs \
+    ros-${ROS_DISTRO}-message-filters \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-vcstool \
     && rm -rf /var/lib/apt/lists/*
 
+# CUDA symlink (cached)
+RUN if [ -d /usr/local/cuda-$(echo ${CUDA_VERSION} | cut -d. -f1,2) ]; then \
+      ln -sfn /usr/local/cuda-$(echo ${CUDA_VERSION} | cut -d. -f1,2) /usr/local/cuda; \
+    fi
+
+# OpenCV (heavy, rarely changes)
 RUN cd /opt && \
     wget -q https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip -O opencv.zip && \
     unzip -q opencv.zip && rm opencv.zip && \
@@ -119,6 +121,7 @@ RUN cd /opt && \
     ldconfig && \
     rm -rf /opt/opencv-${OPENCV_VERSION} /opt/opencv_contrib-${OPENCV_VERSION}
 
+# Pangolin
 RUN cd /opt && \
     git clone --depth 1 https://github.com/stevenlovegrove/Pangolin.git pangolin && \
     cd pangolin && \
@@ -128,8 +131,10 @@ RUN cd /opt && \
       -DCMAKE_INSTALL_PREFIX=/usr/local && \
     cmake --build build --parallel ${NPROC} && \
     cmake --install build && \
-    ldconfig
+    ldconfig && \
+    rm -rf /opt/pangolin
 
+# dlib
 RUN cd /opt && \
     git clone --depth 1 https://github.com/davisking/dlib.git dlib && \
     cmake -S /opt/dlib -B /opt/dlib/build \
@@ -138,24 +143,19 @@ RUN cd /opt && \
       -DCMAKE_INSTALL_PREFIX=/usr/local && \
     cmake --build /opt/dlib/build --parallel ${NPROC} && \
     cmake --install /opt/dlib/build && \
-    ldconfig
+    ldconfig && \
+    rm -rf /opt/dlib
 
 # Install Sophus (header-only SE3/SO3 library required by ORB-SLAM3)
-RUN cd /tmp && \
-    git clone https://github.com/strasdat/Sophus.git && \
-    cd Sophus && \
-    git checkout v1.22.10 && \
+RUN git clone --depth 1 --branch 1.22.10 https://github.com/strasdat/Sophus.git /tmp/Sophus && \
+    cd /tmp/Sophus && \
     mkdir build && cd build && \
     cmake .. -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF && \
     make -j$(nproc) && \
     make install && \
     rm -rf /tmp/Sophus
 
-# Install message_filters for RGB+Depth synchronization
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-${ROS_DISTRO}-message-filters \
-    && rm -rf /var/lib/apt/lists/*
-
+# -------------------------------
 # Build third-party dependencies (cached layer)
 COPY Thirdparty/DBoW2 /opt/OA-SLAM/Thirdparty/DBoW2
 RUN cd /opt/OA-SLAM/Thirdparty/DBoW2 && \
@@ -167,16 +167,11 @@ RUN cd /opt/OA-SLAM/Thirdparty/g2o && \
     cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && \
     cmake --build build --parallel ${NPROC}
 
-# Copy vocabulary and extract (rarely changes)
+# Vocabulary (rarely changes)
 COPY Vocabulary /opt/OA-SLAM/Vocabulary
 RUN cd /opt/OA-SLAM/Vocabulary && tar -xf ORBvoc.txt.tar.gz
 
-# Build fix
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libboost-dev \
-    libboost-python-dev \
-&& rm -rf /var/lib/apt/lists/*
-
+# -------------------------------
 # Copy CMakeLists and other build configuration files
 COPY CMakeLists.txt /opt/OA-SLAM/
 COPY cmake /opt/OA-SLAM/cmake
@@ -199,6 +194,7 @@ RUN cd /opt/OA-SLAM && \
     cmake --install build && \
     ldconfig
 
+# ROS2 wrapper (depends on OA-SLAM build above)
 RUN mkdir -p ${ROS_WS}/src && \
     git clone --depth 1 --branch ${ROS_DISTRO} https://github.com/ros-perception/vision_opencv.git ${ROS_WS}/src/vision_opencv && \
     cp -r /opt/OA-SLAM/ros2/oaslam_ros2_wrapper ${ROS_WS}/src/oaslam_ros2_wrapper
