@@ -6,8 +6,9 @@
 namespace oaslam {
 
 OnnxObservationSource::OnnxObservationSource(const ObservationSourceConfig& config) {
-  detector_ =
-      std::make_shared<ORB_SLAM2::ObjectDetector>(config.source_path, config.ignored_categories);
+  detector_ = std::make_shared<ORB_SLAM2::ObjectDetector>(
+      config.source_path, config.ignored_categories, config.model_input_width,
+      config.model_input_height);
 }
 
 OnnxObservationSource::~OnnxObservationSource() = default;

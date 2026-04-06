@@ -1,6 +1,8 @@
 #ifndef OASLAM_COMMON_FILE_UTILS_H
 #define OASLAM_COMMON_FILE_UTILS_H
 
+#include "oaslam/core/session_types.h"
+
 #include <string>
 #include <vector>
 

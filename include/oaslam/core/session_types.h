@@ -10,6 +10,11 @@ enum class TrackingState { Bootstrapping, Tracking, Relocalizing, Lost };
 enum class RelocalizationMode { Points, Objects, PointsAndObjects };
 enum class ObservationSourceKind { None, File, Onnx };
 
+struct ModelInputSize {
+  int width = 0;
+  int height = 0;
+};
+
 struct SlamBackendConfig {
   std::string vocabulary_file;
   std::string camera_settings_file;
@@ -23,6 +28,8 @@ struct ObservationSourceConfig {
   ObservationSourceKind kind = ObservationSourceKind::None;
   std::string source_path;
   std::vector<int> ignored_categories;
+  int model_input_width = 0;
+  int model_input_height = 0;
 };
 
 struct VisualizerConfig {
@@ -39,6 +46,8 @@ struct SessionConfig {
   VisualizerConfig visualizer;
   AgentGatewayConfig agent_gateway;
 };
+
+ModelInputSize LoadModelInputSize(const std::string& camera_config_path);
 
 }  // namespace oaslam
 

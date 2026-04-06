@@ -150,6 +150,9 @@ class OaSlamWrapperNode : public rclcpp::Node {
     session_config.observation_source.kind = ParseObservationMode(observation_mode);
     session_config.observation_source.ignored_categories =
         LoadIgnoredCategories(ignored_categories_file);
+    const oaslam::ModelInputSize model_input_size = oaslam::LoadModelInputSize(camera_config_file);
+    session_config.observation_source.model_input_width = model_input_size.width;
+    session_config.observation_source.model_input_height = model_input_size.height;
     if (session_config.observation_source.kind == oaslam::ObservationSourceKind::Onnx) {
       if (IsEmptyPath(onnx_model_path)) {
         throw std::runtime_error("onnx_model_path is required when observation_mode is 'onnx'");

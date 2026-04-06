@@ -114,6 +114,9 @@ int main(int argc, char** argv) {
   session_config.observation_source.source_path = detections_file;
   session_config.observation_source.ignored_categories =
       oaslam::LoadIgnoredCategories(ignored_categories_file);
+  const oaslam::ModelInputSize model_input_size = oaslam::LoadModelInputSize(camera_file);
+  session_config.observation_source.model_input_width = model_input_size.width;
+  session_config.observation_source.model_input_height = model_input_size.height;
   session_config.visualizer.enabled = true;
   session_config.agent_gateway.enabled = true;
 

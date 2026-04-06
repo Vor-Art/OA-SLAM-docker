@@ -6,6 +6,8 @@
 #include <sstream>
 #include <string_view>
 
+#include <opencv2/core.hpp>
+
 namespace oaslam {
 
 std::string GetFileExtension(const std::string& path) {
@@ -54,6 +56,33 @@ std::vector<int> LoadIgnoredCategories(const std::string& path) {
     categories.push_back(category);
   }
   return categories;
+}
+
+ModelInputSize LoadModelInputSize(const std::string& camera_config_path) {
+  ModelInputSize size;
+  cv::FileStorage storage(camera_config_path, cv::FileStorage::READ);
+  if (!storage.isOpened()) {
+    return size;
+  }
+
+  cv::FileNode model_width_node = storage["Model.width"];
+  cv::FileNode model_height_node = storage["Model.height"];
+  cv::FileNode camera_width_node = storage["Camera.width"];
+  cv::FileNode camera_height_node = storage["Camera.height"];
+
+  if (!model_width_node.empty()) {
+    model_width_node >> size.width;
+  } else if (!camera_width_node.empty()) {
+    camera_width_node >> size.width;
+  }
+
+  if (!model_height_node.empty()) {
+    model_height_node >> size.height;
+  } else if (!camera_height_node.empty()) {
+    camera_height_node >> size.height;
+  }
+
+  return size;
 }
 
 void LoadImageSequenceList(const std::string& path,

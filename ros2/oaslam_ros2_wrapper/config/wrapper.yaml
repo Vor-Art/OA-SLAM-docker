@@ -6,8 +6,9 @@ oaslam_wrapper:
     camera_id: mono0
     vocabulary_file: /opt/OA-SLAM/Vocabulary/ORBvoc.txt
     camera_config_file: /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/slam_camera.yaml
-    observation_mode: none
-    onnx_model_path: ""
+    observation_mode: onnx
+    # onnx_model_path: ""
+    onnx_model_path: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
     ignored_categories_file: ""
     relocalization_mode: points+objects
     use_viewer: true

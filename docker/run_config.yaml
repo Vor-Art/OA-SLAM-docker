@@ -9,8 +9,8 @@ output_root: /opt/OA-SLAM/Data/runs
 image_source: /opt/OA-SLAM/Data/realsense_recording/work_environment_extracted_full/color
 # Detections  (.json | .onnx | none)
 # detections: /opt/OA-SLAM/Data/realsense_recording/test_static_extracted_lingbot/detections_run_sink_21_20260404_220904.json
-# detections: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
-detections: none
+detections: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
+# detections: none
 ignored_categories: none  # optional, use none to disable
 
 # Relocalization mode: points | objects | points+objects
