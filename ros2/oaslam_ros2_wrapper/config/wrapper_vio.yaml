@@ -1,0 +1,21 @@
+oaslam_vio_node:
+  ros__parameters:
+    # SLAM Backend
+    vocabulary_file: "/app/Vocabulary/ORBvoc.txt"
+    camera_settings_file: "/app/config/d435i_imu_rgbd.yaml"
+    use_viewer: false
+    use_imu: true
+
+    # Observation Source
+    observation_mode: "none"  # "onnx" for real-time detection, "file" for precomputed, "none" to disable
+    detection_model_path: ""
+    detection_file_path: ""
+    ignored_categories_file: ""
+
+    # Relocalization
+    relocalization_mode: "points"  # "points", "objects", "points_and_objects"
+
+    # Topics
+    rgb_topic: "/camera/color/image_raw"
+    depth_topic: "/camera/aligned_depth_to_color/image_raw"
+    imu_topic: "/camera/imu"

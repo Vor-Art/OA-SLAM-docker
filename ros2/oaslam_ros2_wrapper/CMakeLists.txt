@@ -13,6 +13,7 @@ find_package(cv_bridge REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(image_transport REQUIRED)
+find_package(message_filters REQUIRED)
 find_package(oaslam CONFIG REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -36,7 +37,26 @@ ament_target_dependencies(oaslam_wrapper_node
   std_msgs
 )
 
-install(TARGETS oaslam_wrapper_node
+add_executable(oaslam_vio_node
+  src/oaslam_vio_node.cpp
+)
+
+target_link_libraries(oaslam_vio_node
+  PRIVATE
+    Eigen3::Eigen
+    oaslam::oaslam_sdk
+)
+
+ament_target_dependencies(oaslam_vio_node
+  cv_bridge
+  geometry_msgs
+  message_filters
+  rclcpp
+  sensor_msgs
+  std_msgs
+)
+
+install(TARGETS oaslam_wrapper_node oaslam_vio_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

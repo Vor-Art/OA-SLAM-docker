@@ -140,6 +140,22 @@ RUN cd /opt && \
     cmake --install /opt/dlib/build && \
     ldconfig
 
+# Install Sophus (header-only SE3/SO3 library required by ORB-SLAM3)
+RUN cd /tmp && \
+    git clone https://github.com/strasdat/Sophus.git && \
+    cd Sophus && \
+    git checkout v1.22.10 && \
+    mkdir build && cd build && \
+    cmake .. -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/Sophus
+
+# Install message_filters for RGB+Depth synchronization
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-message-filters \
+    && rm -rf /var/lib/apt/lists/*
+
 # Build third-party dependencies (cached layer)
 COPY Thirdparty/DBoW2 /opt/OA-SLAM/Thirdparty/DBoW2
 RUN cd /opt/OA-SLAM/Thirdparty/DBoW2 && \

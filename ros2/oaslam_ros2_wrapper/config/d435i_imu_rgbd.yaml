@@ -1,0 +1,128 @@
+%YAML:1.0
+---
+
+#--------------------------------------------------------------------------------------------
+# System Parameters
+#--------------------------------------------------------------------------------------------
+File.version: "1.0"
+
+#--------------------------------------------------------------------------------------------
+# Camera1 Parameters: Intel RealSense D435i RGB Camera (PinHole model)
+# Intrinsics match slam_camera.yaml; format follows ORB-SLAM3 Camera1.* convention.
+#--------------------------------------------------------------------------------------------
+
+Camera1.type: "PinHole"
+
+# Intrinsic parameters (from factory calibration)
+Camera1.fx: 605.642333984375
+Camera1.fy: 605.6187133789062
+Camera1.cx: 325.03326416015625
+Camera1.cy: 237.22653198242188
+
+# Distortion coefficients (D435i has negligible distortion after rectification)
+Camera1.k1: 0.0
+Camera1.k2: 0.0
+Camera1.p1: 0.0
+Camera1.p2: 0.0
+
+# Image dimensions
+Camera.width: 640
+Camera.height: 480
+
+# Frames per second (D435i typical for RGBD mode)
+Camera.fps: 30
+
+# Color order (0: BGR, 1: RGB)
+Camera.RGB: 1
+
+#--------------------------------------------------------------------------------------------
+# RGBD Parameters
+# D435i depth stream outputs depth in millimeters; ORB-SLAM3 expects meters.
+#--------------------------------------------------------------------------------------------
+
+# Depth map scale factor: depth_in_meters = depth_raw / DepthMapFactor
+RGBD.DepthMapFactor: 1000.0
+
+# Close/far threshold. Baseline times this value gives the threshold for
+# classifying points as close or far. Far points are only inserted from
+# stereo/RGBD, close points are inserted from monocular observations too.
+ThDepth: 40.0
+
+# Stereo baseline (in meters) times fx. Used internally by ORB-SLAM3 for
+# depth-to-disparity conversion. For D435i: ~0.05 m baseline * 969 ≈ 48.45
+Camera.bf: 48.45
+
+#--------------------------------------------------------------------------------------------
+# IMU Parameters: Bosch BMI055 (integrated in Intel RealSense D435i)
+#
+# Noise and random-walk values are typical datasheet / Allan-variance estimates.
+# For production use, run Allan variance analysis on your specific unit.
+#--------------------------------------------------------------------------------------------
+
+# Gyroscope noise density (rad/s/sqrt(Hz))
+IMU.NoiseGyro: 1.7e-4
+
+# Accelerometer noise density (m/s^2/sqrt(Hz))
+IMU.NoiseAcc: 2.0000e-3
+
+# Gyroscope random walk (rad/s^2/sqrt(Hz))
+IMU.GyroWalk: 1.9393e-5
+
+# Accelerometer random walk (m/s^3/sqrt(Hz))
+IMU.AccWalk: 3.0000e-3
+
+# IMU sampling frequency (Hz)
+IMU.Frequency: 200.0
+
+# Insert keyframes when tracking is lost to aid IMU-based recovery
+IMU.InsertKFsWhenLost: 1
+
+#--------------------------------------------------------------------------------------------
+# IMU-Camera Extrinsic: Transformation from IMU body frame to Camera1 (RGB)
+#
+# This is the approximate factory calibration for the D435i.
+# NOTE: For production use, this transform should be calibrated with Kalibr
+# (or similar tool) using your specific camera unit for best accuracy.
+#--------------------------------------------------------------------------------------------
+IMU.T_b_c1: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: f
+  data: [ 1.0,  0.0,  0.0,  0.0115,
+          0.0,  1.0,  0.0, -0.0055,
+          0.0,  0.0,  1.0, -0.0117,
+          0.0,  0.0,  0.0,  1.0]
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+
+# Number of features per image
+ORBextractor.nFeatures: 1500
+
+# Scale factor between levels in the scale pyramid
+ORBextractor.scaleFactor: 1.2
+
+# Number of levels in the scale pyramid
+ORBextractor.nLevels: 8
+
+# Fast threshold
+# Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
+# Firstly we impose iniThFAST. If no corners are detected we impose a lower value minThFAST.
+# You can lower these values if your images have low contrast.
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.02
+Viewer.KeyFrameLineWidth: 0.8
+Viewer.GraphLineWidth: 0.6
+Viewer.PointSize: 2
+Viewer.CameraSize: 0.04
+Viewer.CameraLineWidth: 2
+Viewer.ViewpointX: 0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500

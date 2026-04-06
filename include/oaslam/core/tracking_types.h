@@ -32,6 +32,8 @@ struct TrackingResult {
   SceneSlice scene;
   double relocalization_duration_ms = -1.0;
   bool relocalization_success = false;
+  bool imu_initialized = false;
+  double velocity_x = 0.0, velocity_y = 0.0, velocity_z = 0.0;
 };
 
 }  // namespace oaslam

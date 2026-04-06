@@ -9,6 +9,7 @@ namespace oaslam {
 enum class TrackingState { Bootstrapping, Tracking, Relocalizing, Lost };
 enum class RelocalizationMode { Points, Objects, PointsAndObjects };
 enum class ObservationSourceKind { None, File, Onnx };
+enum class SlamBackendKind { OrbSlam2, OrbSlam3 };
 
 struct ModelInputSize {
   int width = 0;
@@ -22,6 +23,8 @@ struct SlamBackendConfig {
   bool use_ar_viewer = false;
   int use_objects_in_local_ba = 0;
   RelocalizationMode relocalization_mode = RelocalizationMode::Points;
+  SlamBackendKind kind = SlamBackendKind::OrbSlam2;
+  bool use_imu = false;
 };
 
 struct ObservationSourceConfig {
