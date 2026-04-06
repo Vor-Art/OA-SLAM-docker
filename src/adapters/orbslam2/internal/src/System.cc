@@ -135,8 +135,6 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mpARViewer = new ARViewer(this, mpFrameDrawer,mpMap,mpTracker,strSettingsFile);
         mptARViewer = new thread(&ARViewer::Run, mpARViewer);
         mpTracker->SetARViewer(mpARViewer);
-        // mpARViewer->AddModel("/home/mzins/dev/ORB_SLAM2_obj/Examples/Monocular/AR/banana_2.obj", Eigen::Matrix4d::Identity());
-        // mpARViewer->AddModel("/home/mzins/dev/ORB_SLAM2_obj/Examples/Monocular/AR/mug.obj");
         if (bUseViewer) {
             mpViewer->setARViewer(mpARViewer);
         }

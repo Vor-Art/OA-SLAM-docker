@@ -5,11 +5,11 @@
 # Camera Parameters. Adjust them!
 #--------------------------------------------------------------------------------------------
 
-# Camera calibration and distortion parameters (OpenCV) 
-Camera.fx: 605.642
-Camera.fy: 605.619
-Camera.cx: 325.033
-Camera.cy: 237.227
+# Camera calibration and distortion parameters (OpenCV)
+Camera.fx: 605.642333984375
+Camera.fy: 605.6187133789062
+Camera.cx: 325.03326416015625
+Camera.cy: 237.22653198242188
 
 Camera.k1: 0
 Camera.k2: 0
@@ -20,8 +20,8 @@ Camera.k3: 0
 Camera.width: 640
 Camera.height: 480
 
-# Camera frames per second 
-Camera.fps: 5
+# Camera frames per second
+Camera.fps: 60
 
 # Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
 Camera.RGB: 1
@@ -41,10 +41,10 @@ deterministic_seed: 0
 # ORB Extractor: Number of features per image
 ORBextractor.nFeatures: 1500
 
-# ORB Extractor: Scale factor between levels in the scale pyramid 	
+# ORB Extractor: Scale factor between levels in the scale pyramid
 ORBextractor.scaleFactor: 1.2
 
-# ORB Extractor: Number of levels in the scale pyramid	
+# ORB Extractor: Number of levels in the scale pyramid
 ORBextractor.nLevels: 8
 
 # ORB Extractor: Fast threshold
@@ -61,8 +61,6 @@ Viewer.KeyFrameSize: 0.02
 Viewer.KeyFrameLineWidth: 0.8
 Viewer.GraphLineWidth: 0.6
 Viewer.PointSize: 2
-# Viewer.CameraSize: 0.08
-# Viewer.CameraLineWidth: 3
 Viewer.CameraSize: 0.04
 Viewer.CameraLineWidth: 2
 Viewer.ViewpointX: 0

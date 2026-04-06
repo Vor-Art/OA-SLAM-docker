@@ -1,24 +1,26 @@
+x-oaslam-build: &oaslam-build
+  context: ..
+  dockerfile: docker/Dockerfile
+  args:
+    CUDA_VERSION: ${CUDA_VERSION}
+    CUDNN_FLAVOR: ${CUDNN_FLAVOR}
+    UBUNTU_VERSION: ${UBUNTU_VERSION}
+    OPENCV_VERSION: ${OPENCV_VERSION}
+    NPROC: ${NPROC}
+    CUDA_ARCH_BIN: ${CUDA_ARCH_BIN}
+    # proxy disable (needed to run on this matchie)
+    HTTP_PROXY: ${DOCKER_BUILD_HTTP_PROXY:-}
+    HTTPS_PROXY: ${DOCKER_BUILD_HTTPS_PROXY:-}
+    ALL_PROXY: ${DOCKER_BUILD_ALL_PROXY:-}
+    NO_PROXY: ${DOCKER_BUILD_NO_PROXY:-}
+    http_proxy: ${DOCKER_BUILD_HTTP_PROXY:-}
+    https_proxy: ${DOCKER_BUILD_HTTPS_PROXY:-}
+    all_proxy: ${DOCKER_BUILD_ALL_PROXY:-}
+    no_proxy: ${DOCKER_BUILD_NO_PROXY:-}
+
 services:
   oa-slam:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-      args:
-        CUDA_VERSION: ${CUDA_VERSION}
-        CUDNN_FLAVOR: ${CUDNN_FLAVOR}
-        UBUNTU_VERSION: ${UBUNTU_VERSION}
-        OPENCV_VERSION: ${OPENCV_VERSION}
-        NPROC: ${NPROC}
-        CUDA_ARCH_BIN: ${CUDA_ARCH_BIN}
-        # proxy disable (needed to run on this matchie)
-        HTTP_PROXY: ${DOCKER_BUILD_HTTP_PROXY:-}
-        HTTPS_PROXY: ${DOCKER_BUILD_HTTPS_PROXY:-}
-        ALL_PROXY: ${DOCKER_BUILD_ALL_PROXY:-}
-        NO_PROXY: ${DOCKER_BUILD_NO_PROXY:-}
-        http_proxy: ${DOCKER_BUILD_HTTP_PROXY:-}
-        https_proxy: ${DOCKER_BUILD_HTTPS_PROXY:-}
-        all_proxy: ${DOCKER_BUILD_ALL_PROXY:-}
-        no_proxy: ${DOCKER_BUILD_NO_PROXY:-}
+    build: *oaslam-build
     image: oa-slam:latest
     container_name: oa-slam
     environment:
@@ -30,6 +32,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ../Data:/opt/OA-SLAM/Data
       - ../Cameras:/opt/OA-SLAM/Cameras:ro
+      - ../ros2:/opt/OA-SLAM/ros2:ro
       - ./:/opt/OA-SLAM/docker:ro
     network_mode: host
     ipc: host
@@ -40,3 +43,32 @@ services:
     gpus: all
     working_dir: /opt/OA-SLAM
     entrypoint: ["python3", "/opt/OA-SLAM/docker/run_oa_slam.py"]
+
+  oa-slam-ros2:
+    build: *oaslam-build
+    image: oa-slam:latest
+    container_name: oa-slam-ros2
+    profiles: ["ros2"]
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+      QT_X11_NO_MITSHM: "1"
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      USE_SIM_TIME: ${USE_SIM_TIME:-false}
+      OASLAM_ROS2_PARAMS_FILE: ${OASLAM_ROS2_PARAMS_FILE:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper.yaml}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../Data:/opt/OA-SLAM/Data
+      - ../Cameras:/opt/OA-SLAM/Cameras:ro
+      - ../ros2:/opt/OA-SLAM/ros2:ro
+      - ./:/opt/OA-SLAM/docker:ro
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+    init: true
+    user: "${UID:-1000}:${GID:-1000}"
+    gpus: all
+    working_dir: /opt/OA-SLAM
+    entrypoint: ["/bin/bash", "/opt/OA-SLAM/docker/run_ros2_wrapper.sh"]

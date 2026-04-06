@@ -1,0 +1,14 @@
+oaslam_wrapper:
+  ros__parameters:
+    image_topic: /camera/image_raw
+    pose_topic: /oa_slam/camera_pose
+    world_frame_id: map
+    camera_id: mono0
+    vocabulary_file: /opt/OA-SLAM/Vocabulary/ORBvoc.txt
+    camera_config_file: /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/slam_camera.yaml
+    observation_mode: none
+    onnx_model_path: ""
+    ignored_categories_file: ""
+    relocalization_mode: points+objects
+    use_viewer: false
+    use_sim_time: false

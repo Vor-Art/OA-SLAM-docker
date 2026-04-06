@@ -8,14 +8,16 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG OPENCV_VERSION=4.6.0
 ARG NPROC=16
 ARG CUDA_ARCH_BIN=7.5
+ARG ROS_DISTRO=humble
 
 ENV TZ=Europe/Moscow
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
+ENV ROS_DISTRO=${ROS_DISTRO}
+ENV ROS_WS=/opt/oaslam_ros2_ws
 
 SHELL ["/bin/bash", "-c"]
 
-# todo delete   protobuf-compiler libprotobuf-dev 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     locales \
     ca-certificates \
@@ -48,10 +50,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libepoxy-dev \
     libxine2-dev \
     libpq-dev \
-    protobuf-compiler \
-    libprotobuf-dev \
+    gnupg2 \
+    lsb-release \
     python3-dev \
     python3-pip \
+    python3-numpy \
     python3-yaml \
     tree \
     && locale-gen en_US en_US.UTF-8 \
@@ -72,6 +75,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN if [ -d /usr/local/cuda-$(echo ${CUDA_VERSION} | cut -d. -f1,2) ]; then \
       ln -sfn /usr/local/cuda-$(echo ${CUDA_VERSION} | cut -d. -f1,2) /usr/local/cuda; \
     fi
+
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+      -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo ${UBUNTU_CODENAME}) main" \
+      > /etc/apt/sources.list.d/ros2.list
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-ros-base \
+    ros-${ROS_DISTRO}-ament-cmake \
+    ros-${ROS_DISTRO}-geometry-msgs \
+    ros-${ROS_DISTRO}-image-transport \
+    ros-${ROS_DISTRO}-launch \
+    ros-${ROS_DISTRO}-launch-ros \
+    ros-${ROS_DISTRO}-rclcpp \
+    ros-${ROS_DISTRO}-sensor-msgs \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    python3-vcstool \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN cd /opt && \
     wget -q https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip -O opencv.zip && \
@@ -135,12 +157,13 @@ RUN cd /opt/OA-SLAM/Vocabulary && tar -xf ORBvoc.txt.tar.gz
 
 # Copy CMakeLists and other build configuration files
 COPY CMakeLists.txt /opt/OA-SLAM/
+COPY cmake /opt/OA-SLAM/cmake
 
 # Copy source code and headers (these change more frequently)
 COPY include /opt/OA-SLAM/include
 COPY src /opt/OA-SLAM/src
-COPY Examples /opt/OA-SLAM/Examples
-COPY Cameras /opt/OA-SLAM/Cameras
+COPY examples /opt/OA-SLAM/examples
+COPY ros2 /opt/OA-SLAM/ros2
 RUN mkdir -p /opt/OA-SLAM/Data
 
 # Build OA-SLAM main project
@@ -151,7 +174,17 @@ RUN cd /opt/OA-SLAM && \
       -DCMAKE_BUILD_TYPE=Release \
       -DCUDAToolkit_ROOT=/usr/local/cuda && \
     cmake --build build --parallel ${NPROC} && \
+    cmake --install build && \
     ldconfig
+
+RUN mkdir -p ${ROS_WS}/src && \
+    git clone --depth 1 --branch ${ROS_DISTRO} https://github.com/ros-perception/vision_opencv.git ${ROS_WS}/src/vision_opencv && \
+    cp -r /opt/OA-SLAM/ros2/oaslam_ros2_wrapper ${ROS_WS}/src/oaslam_ros2_wrapper
+
+RUN /bin/bash -lc "source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    cd ${ROS_WS} && \
+    export CMAKE_PREFIX_PATH=/usr/local:\${CMAKE_PREFIX_PATH} && \
+    colcon build --merge-install --packages-select cv_bridge oaslam_ros2_wrapper --cmake-args -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=/usr/local/lib/cmake/opencv4"
 
 WORKDIR /opt/OA-SLAM
 CMD ["/bin/bash"]
