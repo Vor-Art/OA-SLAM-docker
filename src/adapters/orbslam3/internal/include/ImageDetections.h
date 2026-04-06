@@ -94,7 +94,7 @@ private:
 class ObjectDetector : public ImageDetectionsManager
 {
 public:
-    ObjectDetector(const std::string& model, const std::vector<int>& cats_to_ignore);
+    ObjectDetector(const std::string& model, const std::vector<int>& cats_to_ignore, int input_width = 640, int input_height = 640);
     ~ObjectDetector() {}
 
 
@@ -113,12 +113,15 @@ private:
     // cv::dnn::Net network_;
     std::unique_ptr<cv::dnn::Net> network_;
     std::unordered_set<int> ignored_cats_;
+    int input_width_ = 640;
+    int input_height_ = 640;
 };
 #else
 class ObjectDetector : public ImageDetectionsManager
 {
 public:
-    ObjectDetector(const std::string& model, const std::vector<int>& cats_to_ignore) {
+    ObjectDetector(const std::string& model, const std::vector<int>& cats_to_ignore, int input_width = 640, int input_height = 640) {
+        (void)model; (void)cats_to_ignore; (void)input_width; (void)input_height;
         std::cerr << "Object detection is only available with dnn module of opencv >= 4\n";
     }
     ~ObjectDetector() {}

@@ -44,12 +44,12 @@ cv::Mat TransformToCvMat(const Transform4d& transform) {
   return matrix;
 }
 
-cv::Rect2d EigenBBoxToRect(const ORB_SLAM2::BBox2& bbox) {
+cv::Rect2d EigenBBoxToRect(const ORB_SLAM3::BBox2& bbox) {
   return cv::Rect2d(bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]);
 }
 
-ORB_SLAM2::BBox2 RectToEigenBBox(const cv::Rect2d& rect) {
-  return ORB_SLAM2::BBox2(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
+ORB_SLAM3::BBox2 RectToEigenBBox(const cv::Rect2d& rect) {
+  return ORB_SLAM3::BBox2(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
 }
 
 double EstimateMeanDepthCameraZ(const cv::Mat& Tcw, const std::vector<cv::Point3d>& world_points) {

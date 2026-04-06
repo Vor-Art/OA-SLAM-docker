@@ -7,7 +7,6 @@
 #include "src/adapters/oa_objects/oa_object_pipeline_adapter.h"
 #include "src/adapters/observations/file_observation_source.h"
 #include "src/adapters/observations/onnx_observation_source.h"
-#include "src/adapters/orbslam2/orbslam2_backend_adapter.h"
 #include "src/adapters/orbslam3/orbslam3_backend_adapter.h"
 #include "src/adapters/visualization/pangolin_visualizer.h"
 
@@ -30,29 +29,17 @@ class NullObservationSource : public IObservationSource {
 ModuleBundle CreateDefaultModules(const SessionConfig& config) {
   ModuleBundle bundle;
 
-  // Quit-check callback, set per backend type below.
   std::function<bool()> quit_check = []() { return false; };
 
-  switch (config.slam_backend.kind) {
-    case SlamBackendKind::OrbSlam3: {
-      auto backend = std::make_unique<OrbSlam3BackendAdapter>(
-          config.slam_backend.vocabulary_file,
-          config.slam_backend.camera_settings_file,
-          config.slam_backend.use_imu,
-          config.slam_backend.use_viewer);
-      auto* ptr = backend.get();
-      quit_check = [ptr]() { return ptr->shouldQuit(); };
-      bundle.slam_backend = std::move(backend);
-      break;
-    }
-    case SlamBackendKind::OrbSlam2:
-    default: {
-      auto backend = std::make_unique<OrbSlam2BackendAdapter>(config.slam_backend);
-      auto* ptr = backend.get();
-      quit_check = [ptr]() { return ptr->shouldQuit(); };
-      bundle.slam_backend = std::move(backend);
-      break;
-    }
+  {
+    auto backend = std::make_unique<OrbSlam3BackendAdapter>(
+        config.slam_backend.vocabulary_file,
+        config.slam_backend.camera_settings_file,
+        config.slam_backend.use_imu,
+        config.slam_backend.use_viewer);
+    auto* ptr = backend.get();
+    quit_check = [ptr]() { return ptr->shouldQuit(); };
+    bundle.slam_backend = std::move(backend);
   }
 
   switch (config.observation_source.kind) {

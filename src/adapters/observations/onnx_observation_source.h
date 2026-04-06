@@ -6,7 +6,7 @@
 #include "oaslam/core/session_types.h"
 #include "oaslam/ports/observation_source.h"
 
-namespace ORB_SLAM2 {
+namespace ORB_SLAM3 {
 class ImageDetectionsManager;
 }
 
@@ -21,7 +21,7 @@ class OnnxObservationSource : public IObservationSource {
   void reset() override;
 
  private:
-  std::shared_ptr<ORB_SLAM2::ImageDetectionsManager> detector_;
+  std::shared_ptr<ORB_SLAM3::ImageDetectionsManager> detector_;
 };
 
 }  // namespace oaslam
