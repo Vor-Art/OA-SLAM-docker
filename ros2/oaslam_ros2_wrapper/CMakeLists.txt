@@ -23,9 +23,8 @@ add_executable(oaslam_wrapper_node
 )
 
 target_link_libraries(oaslam_wrapper_node
-  PRIVATE
-    Eigen3::Eigen
-    oaslam::oaslam_sdk
+  Eigen3::Eigen
+  oaslam::oaslam_sdk
 )
 
 ament_target_dependencies(oaslam_wrapper_node

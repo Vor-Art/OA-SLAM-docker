@@ -8,6 +8,8 @@ x-oaslam-build: &oaslam-build
     OPENCV_VERSION: ${OPENCV_VERSION}
     NPROC: ${NPROC}
     CUDA_ARCH_BIN: ${CUDA_ARCH_BIN}
+    OASLAM_UID: ${UID:-1000}
+    OASLAM_GID: ${GID:-1000}
     # proxy disable (needed to run on this matchie)
     HTTP_PROXY: ${DOCKER_BUILD_HTTP_PROXY:-}
     HTTPS_PROXY: ${DOCKER_BUILD_HTTPS_PROXY:-}
@@ -28,6 +30,8 @@ services:
       QT_X11_NO_MITSHM: "1"
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      HOME: /home/oaslam
+      ROS_HOME: /home/oaslam/.ros
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ../Data:/opt/OA-SLAM/Data
@@ -54,6 +58,8 @@ services:
       QT_X11_NO_MITSHM: "1"
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      HOME: /home/oaslam
+      ROS_HOME: /home/oaslam/.ros
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       USE_SIM_TIME: ${USE_SIM_TIME:-false}
       OASLAM_ROS2_PARAMS_FILE: ${OASLAM_ROS2_PARAMS_FILE:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper.yaml}

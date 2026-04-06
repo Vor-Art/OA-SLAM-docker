@@ -235,7 +235,6 @@ int main(int argc, char** argv) {
 
   try {
     rclcpp::NodeOptions options;
-    options.automatically_declare_parameters_from_overrides(true);
     auto node = std::make_shared<OaSlamWrapperNode>(options);
     rclcpp::spin(node);
   } catch (const std::exception& exc) {

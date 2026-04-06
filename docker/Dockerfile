@@ -155,6 +155,12 @@ RUN cd /opt/OA-SLAM/Thirdparty/g2o && \
 COPY Vocabulary /opt/OA-SLAM/Vocabulary
 RUN cd /opt/OA-SLAM/Vocabulary && tar -xf ORBvoc.txt.tar.gz
 
+# Build fix
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libboost-dev \
+    libboost-python-dev \
+&& rm -rf /var/lib/apt/lists/*
+
 # Copy CMakeLists and other build configuration files
 COPY CMakeLists.txt /opt/OA-SLAM/
 COPY cmake /opt/OA-SLAM/cmake
@@ -185,6 +191,14 @@ RUN /bin/bash -lc "source /opt/ros/${ROS_DISTRO}/setup.bash && \
     cd ${ROS_WS} && \
     export CMAKE_PREFIX_PATH=/usr/local:\${CMAKE_PREFIX_PATH} && \
     colcon build --merge-install --packages-select cv_bridge oaslam_ros2_wrapper --cmake-args -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=/usr/local/lib/cmake/opencv4"
+
+ARG OASLAM_UID=1000
+ARG OASLAM_GID=1000
+ARG OASLAM_USER=oaslam
+
+RUN groupadd -g "${OASLAM_GID}" "${OASLAM_USER}" && \
+    useradd -m -s /bin/bash -u "${OASLAM_UID}" -g "${OASLAM_GID}" "${OASLAM_USER}" && \
+    install -d -o "${OASLAM_UID}" -g "${OASLAM_GID}" "/home/${OASLAM_USER}/.ros"
 
 WORKDIR /opt/OA-SLAM
 CMD ["/bin/bash"]
