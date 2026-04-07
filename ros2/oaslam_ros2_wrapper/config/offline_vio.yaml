@@ -34,11 +34,14 @@ oaslam_offline_vio_node:
     use_imu: true
 
     # ── Observation Source ──
-    observation_mode: "none"  # "onnx" for real-time detection, "file" for precomputed, "none" to disable
-    detection_model_path: ""
+    observation_mode: "onnx"  # "onnx" for real-time detection, "file" for precomputed, "none" to disable
+    detection_model_path: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
     detection_file_path: ""
     ignored_categories_file: ""
+    # onnx_model_path: ""
+    onnx_model_path: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
 
+  
     # ── Relocalization ──
     relocalization_mode: "points_and_objects"  # "points", "objects", "points_and_objects"
 

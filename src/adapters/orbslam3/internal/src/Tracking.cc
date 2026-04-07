@@ -1752,7 +1752,6 @@ void Tracking::PreintegrateIMU()
 
     while(true)
     {
-        bool bSleep = false;
         {
             unique_lock<mutex> lock(mMutexImuQueue);
             if(!mlQueueImuData.empty())
@@ -1777,11 +1776,8 @@ void Tracking::PreintegrateIMU()
             else
             {
                 break;
-                bSleep = true;
             }
         }
-        if(bSleep)
-            usleep(500);
     }
 
     const int n = mvImuFromLastFrame.size()-1;

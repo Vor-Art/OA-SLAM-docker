@@ -11,6 +11,7 @@
 // Forward declarations — do NOT include ORB-SLAM3 headers here
 namespace ORB_SLAM3 {
 class System;
+class Detection;
 }
 
 namespace oaslam {
@@ -40,6 +41,8 @@ class OrbSlam3BackendAdapter final : public ISlamBackend {
 
  private:
   TrackingState mapTrackingState(int orbslam3_state) const;
+  std::vector<std::shared_ptr<ORB_SLAM3::Detection>> toLegacyDetections(
+      const std::vector<Detection2D>& detections) const;
 
   std::unique_ptr<ORB_SLAM3::System> system_;
   bool use_imu_ = false;

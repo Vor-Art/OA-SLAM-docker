@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "src/adapters/orbslam3/internal/include/ImageDetections.h"
 #include "src/adapters/orbslam3/internal/include/MapPoint.h"
 #include "src/adapters/orbslam3/internal/include/System.h"
 #include "src/adapters/orbslam3/internal/include/Tracking.h"
@@ -28,14 +29,29 @@ OrbSlam3BackendAdapter::~OrbSlam3BackendAdapter() {
   shutdown();
 }
 
+std::vector<ORB_SLAM3::Detection::Ptr> OrbSlam3BackendAdapter::toLegacyDetections(
+    const std::vector<Detection2D>& detections) const {
+  std::vector<ORB_SLAM3::Detection::Ptr> legacy;
+  legacy.reserve(detections.size());
+  for (const auto& det : detections) {
+    Eigen::Vector4d bbox(det.bbox.x, det.bbox.y,
+                         det.bbox.x + det.bbox.width,
+                         det.bbox.y + det.bbox.height);
+    legacy.push_back(std::make_shared<ORB_SLAM3::Detection>(
+        det.category_id, det.score, bbox));
+  }
+  return legacy;
+}
+
 TrackingResult OrbSlam3BackendAdapter::processFrame(
     const FramePacket& frame,
     const std::vector<Detection2D>& detections,
     const std::vector<PoseProposal>& pose_proposals) {
-  (void)detections;
   (void)pose_proposals;
 
   TrackingResult result;
+
+  const auto legacy_detections = toLegacyDetections(detections);
 
   // Call ORB-SLAM3 TrackRGBD with or without IMU data
   Sophus::SE3f Tcw;
@@ -43,10 +59,11 @@ TrackingResult OrbSlam3BackendAdapter::processFrame(
     auto imu_points =
         orbslam3_utils::ToImuPoints(frame.imu_measurements);
     Tcw = system_->TrackRGBD(frame.image, frame.depth_image,
-                             frame.timestamp, imu_points);
+                             frame.timestamp, legacy_detections,
+                             imu_points);
   } else {
     Tcw = system_->TrackRGBD(frame.image, frame.depth_image,
-                             frame.timestamp);
+                             frame.timestamp, legacy_detections);
   }
 
   // Map the ORB-SLAM3 tracking state to our TrackingState enum

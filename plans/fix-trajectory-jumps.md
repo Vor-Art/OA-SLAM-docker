@@ -261,3 +261,106 @@ Create `scripts/detect_trajectory_jumps.py` that:
 3. Flags frames where translation > threshold (e.g., 0.5m) or rotation > threshold (e.g., 30 degrees)
 4. Replaces flagged poses with `timestamp 0 0 0 0 0 0 1`
 5. Writes the cleaned trajectory to a new file
+
+---
+
+## Phase 2: Deep IMU Code Dive — Additional Fixes
+
+### Change 6: Clear stale IMU queue on map reset (Tracking.cc — ResetActiveMap)
+
+**Bug**: When `ResetActiveMap()` is called, the IMU measurement queue `mlQueueImuData` retains stale measurements from the old map. These stale measurements get preintegrated into the new map's first frames, corrupting the initial pose estimates and causing the reset cycle to repeat.
+
+**Fix**: Added `mlQueueImuData.clear()` inside `ResetActiveMap()` with proper mutex locking.
+
+**File**: [`Tracking.cc`](../src/adapters/orbslam3/internal/src/Tracking.cc:4467)
+
+### Change 7: Reset IMU preintegration accumulator on map reset (Tracking.cc — ResetActiveMap)
+
+**Bug**: `mpImuPreintegratedFromLastKF` (the keyframe-to-current preintegration accumulator) is not reset during `ResetActiveMap()`, even though `CreateMapInAtlas()` does reset it. This means the new map starts with stale preintegration data from the old map.
+
+**Fix**: Added `delete mpImuPreintegratedFromLastKF` + `new IMU::Preintegrated(...)` in `ResetActiveMap()`, matching the pattern in `CreateMapInAtlas()`.
+
+**File**: [`Tracking.cc`](../src/adapters/orbslam3/internal/src/Tracking.cc:4472)
+
+### Change 8: Reduce RECENTLY_LOST timeout from 5s to 1s (Tracking.cc constructor)
+
+**Bug**: `time_recently_lost` is initialized to 5.0 seconds. During the RECENTLY_LOST state, the system predicts pose using IMU-only (no visual correction). With consumer-grade IMUs like the BMI055, IMU drift accumulates rapidly — after 5 seconds of dead-reckoning, the pose error can be meters. When visual tracking recovers, the jump from the drifted IMU pose to the correct visual pose creates a trajectory discontinuity.
+
+**Before**:
+```cpp
+time_recently_lost(5.0),
+```
+
+**After**:
+```cpp
+time_recently_lost(1.0),
+```
+
+**File**: [`Tracking.cc`](../src/adapters/orbslam3/internal/src/Tracking.cc:60)
+
+### Change 9: Implement ResetFrameIMU() (was a TODO stub) (Tracking.cc)
+
+**Bug**: `ResetFrameIMU()` at line 1935 was an empty TODO stub:
+```cpp
+void Tracking::ResetFrameIMU()
+{
+    // TODO To implement...
+}
+```
+This function is called at line 2349 after relocalization (`mCurrentFrame.mnId == mnLastRelocFrameId + mnFramesToResetIMU`). Without implementation, IMU preintegration is never reset after relocalization, causing stale preintegration data to corrupt the new pose estimates.
+
+**Fix**: Implemented the function to:
+1. Delete and recreate `mpImuPreintegratedFromLastKF` with current bias
+2. Update `mCurrentFrame.mpImuPreintegrated` pointer
+3. Update `mLastBias` bookkeeping
+4. Anchor to current keyframe
+
+**File**: [`Tracking.cc`](../src/adapters/orbslam3/internal/src/Tracking.cc:1935)
+
+### Change 10: Add null pointer guard for mPrevKF chain (LocalMapping.cc)
+
+**Bug**: At line 131-132, `mpCurrentKeyFrame->mPrevKF->mPrevKF` is dereferenced without null check. If there are only 2-3 keyframes in the map (common right after a map reset), `mPrevKF->mPrevKF` could be null, causing a segfault or undefined behavior.
+
+**Fix**: Wrapped the motion check in `if(mpCurrentKeyFrame->mPrevKF && mpCurrentKeyFrame->mPrevKF->mPrevKF)`. The `LocalInertialBA` call remains outside the guard so it still runs.
+
+**File**: [`LocalMapping.cc`](../src/adapters/orbslam3/internal/src/LocalMapping.cc:132)
+
+---
+
+## Additional Observations (Not Fixed — Low Priority)
+
+### Dead code in PreintegrateIMU() (Tracking.cc line 1779-1780)
+
+```cpp
+else
+{
+    break;        // ← exits the while(true) loop
+    bSleep = true; // ← DEAD CODE: never reached
+}
+```
+The `bSleep = true` after `break` is unreachable. The `if(bSleep) usleep(500)` at line 1783 never triggers. In an offline scenario this is harmless (all IMU data is already in the queue), but in a real-time scenario this would cause the function to exit prematurely when the IMU queue is temporarily empty instead of waiting for data.
+
+### Memory leak: mpImuPreintegratedFrame never freed
+
+`new IMU::Preintegrated(...)` is allocated for `mCurrentFrame.mpImuPreintegratedFrame` at lines 1732, 1746, 1792, 1799 but never explicitly freed. When `mLastFrame = Frame(mCurrentFrame)` copies the pointer, the old `mLastFrame`'s allocation is leaked. This is a pre-existing ORB-SLAM3 design issue and doesn't cause trajectory jumps, but does cause gradual memory growth.
+
+### TrackWithMotionModel() returns true without visual matching when IMU initialized
+
+At line 3277-3281, when IMU is initialized and past the relocalization grace period, `TrackWithMotionModel()` calls `PredictStateIMU()` and returns `true` immediately — skipping all visual feature matching. This is intentional ORB-SLAM3 design (visual refinement happens later in `TrackLocalMap()`), but it means the initial pose estimate is purely IMU-based, making it sensitive to IMU preintegration quality.
+
+---
+
+## Summary of All Changes
+
+| # | File | Description | Severity |
+|---|------|-------------|----------|
+| 1 | `oaslam_offline_vio_node.cpp` | Fix IMU drain bug (keep boundary measurement) | **CRITICAL** |
+| 2 | `d435i_imu_rgbd.yaml` | Add `IMU.fastInit: 1` | HIGH |
+| 3 | `LocalMapping.cc` | Relax motion threshold (`mTinit<20, dist<0.005`) | HIGH |
+| 4 | `Tracking.cc` | Fix `mImuPer` hardcoding | HIGH |
+| 5 | `scripts/detect_trajectory_jumps.py` | Post-processing jump detection | TOOL |
+| 6 | `Tracking.cc` | Clear IMU queue in `ResetActiveMap()` | **CRITICAL** |
+| 7 | `Tracking.cc` | Reset preintegration in `ResetActiveMap()` | **CRITICAL** |
+| 8 | `Tracking.cc` | Reduce `time_recently_lost` 5s → 1s | MEDIUM |
+| 9 | `Tracking.cc` | Implement `ResetFrameIMU()` (was TODO stub) | HIGH |
+| 10 | `LocalMapping.cc` | Null guard for `mPrevKF->mPrevKF` chain | MEDIUM |
