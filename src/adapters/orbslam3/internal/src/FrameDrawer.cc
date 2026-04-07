@@ -18,6 +18,10 @@
 
 #include "FrameDrawer.h"
 #include "Tracking.h"
+#include "ObjectTrack.h"
+#include "MapObject.h"
+#include "ColorManager.h"
+#include "Ellipsoid.h"
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -357,6 +361,8 @@ void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
         s << " LOADING ORB VOCABULARY. PLEASE WAIT...";
     }
 
+    s << " | FRAME "  << frame_id_;
+
     int baseline=0;
     cv::Size textSize = cv::getTextSize(s.str(),cv::FONT_HERSHEY_PLAIN,1,1,&baseline);
 
@@ -370,7 +376,12 @@ void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 void FrameDrawer::Update(Tracking *pTracker)
 {
     unique_lock<mutex> lock(mMutex);
-    pTracker->mImGray.copyTo(mIm);
+    // Store color image if available, otherwise grayscale
+    if (!pTracker->im_rgb_.empty())
+        pTracker->im_rgb_.copyTo(mIm);
+    else
+        pTracker->mImGray.copyTo(mIm);
+
     mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;
     mThDepth = pTracker->mCurrentFrame.mThDepth;
     mvCurrentDepth = pTracker->mCurrentFrame.mvDepth;
@@ -387,6 +398,7 @@ void FrameDrawer::Update(Tracking *pTracker)
     mvbVO = vector<bool>(N,false);
     mvbMap = vector<bool>(N,false);
     mbOnlyTracking = pTracker->mbOnlyTracking;
+    frame_id_ = pTracker->GetCurrentFrameIdx();
 
     //Variables for the new visualization
     mCurrentFrame = pTracker->mCurrentFrame;
@@ -434,6 +446,124 @@ void FrameDrawer::Update(Tracking *pTracker)
 
     }
     mState=static_cast<int>(pTracker->mLastProcessedState);
+
+    // Collect object detection and projection widgets
+    auto tracks = pTracker->GetObjectTracks();
+    detections_widgets_.clear();
+
+    const auto& detections = pTracker->GetCurrentFrameDetections();
+    for (auto det : detections) {
+        detections_widgets_.push_back(DetectionWidget(det->bbox, 0, det->category_id,
+                                        det->score, cv::Scalar(0, 0, 0),
+                                        2, false));
+    }
+    auto current_frame_id = pTracker->GetCurrentFrameIdx();
+    for (auto tr : tracks) {
+        if (current_frame_id == tr->GetLastObsFrameId()) {
+            auto bb = tr->GetLastBbox();
+            detections_widgets_.push_back(DetectionWidget(bb, tr->GetId(), tr->GetCategoryId(),
+                                                            tr->GetLastObsScore(), tr->GetColor(),
+                                                            3, true));
+        }
+    }
+
+    object_projections_widgets_.clear();
+    if (pTracker->mCurrentFrame.HasPose()) {
+        // Get pose as Sophus::SE3f, convert to Eigen 3x4 double matrix
+        Sophus::SE3f Tcw_sophus = pTracker->mCurrentFrame.GetPose();
+        Eigen::Matrix<double, 3, 4> Rt = Tcw_sophus.matrix().cast<double>().block<3,4>(0,0);
+
+        // Get calibration matrix from Eigen::Matrix3f, cast to double
+        Eigen::Matrix3d K = pTracker->mCurrentFrame.mK_.cast<double>();
+
+        Eigen::Matrix<double, 3, 4> P = K * Rt;
+
+        for (auto& tr : tracks) {
+            const auto* obj = tr->GetMapObject();
+            if (obj) {
+                auto proj = obj->GetEllipsoid().project(P);
+                object_projections_widgets_.push_back(ObjectProjectionWidget(proj, tr->GetId(),
+                                                                             tr->GetCategoryId(), tr->GetColor(),
+                                                                             tr->GetStatus() == ObjectTrackStatus::IN_MAP,
+                                                                             tr->unc_));
+            }
+        }
+    }
+}
+
+void draw_ellipse_dashed(cv::Mat img, const Ellipse& ell, const cv::Scalar& color, int thickness)
+{
+    int size = 8;
+    int space = 16;
+    const auto& c = ell.GetCenter();
+    const auto& axes = ell.GetAxes();
+    double angle = ell.GetAngle();
+    for (int i = 0; i < 360; i += space) {
+        cv::ellipse(img, cv::Point2f(c[0], c[1]), cv::Size2f(axes[0], axes[1]),
+                    TO_DEG(angle), i, i+size, color, thickness);
+    }
+}
+
+cv::Mat FrameDrawer::DrawDetections(cv::Mat img)
+{
+    std::vector<DetectionWidget, Eigen::aligned_allocator<DetectionWidget>> detections;
+    {
+        unique_lock<mutex> lock(mMutex);
+        detections = detections_widgets_;
+    }
+    const auto& manager = CategoryColorsManager::GetInstance();
+    cv::Scalar color;
+    for (auto d : detections) {
+        const auto& bb = d.bbox;
+        if (use_category_cols_) {
+            color = manager[d.category_id];
+        } else {
+            color = d.color;
+        }
+        cv::rectangle(img, cv::Point2i(bb[0], bb[1]),
+                           cv::Point2i(bb[2], bb[3]),
+                           color,
+                           d.thickness);
+        if (d.display_info) {
+            std::stringstream ss;
+            ss << std::fixed << std::setprecision(2) << d.score;
+            cv::putText(img, std::to_string(d.id) + "|" + ss.str() + "|" + std::to_string(d.category_id),
+                        cv::Point2i(bb[0]-10, bb[1]-5), cv::FONT_HERSHEY_DUPLEX,
+                        0.55, cv::Scalar(255, 255, 255), 1, false);
+        }
+    }
+    return img;
+}
+
+cv::Mat FrameDrawer::DrawProjections(cv::Mat img)
+{
+    std::vector<ObjectProjectionWidget, Eigen::aligned_allocator<ObjectProjectionWidget>> projections;
+    {
+        unique_lock<mutex> lock(mMutex);
+        projections = object_projections_widgets_;
+    }
+
+    const auto& manager= CategoryColorsManager::GetInstance();
+    cv::Scalar color;
+    for (auto w : projections)
+    {
+        const auto& ell = w.ellipse;
+        const auto& c = ell.GetCenter();
+        const auto& axes = ell.GetAxes();
+        double angle = ell.GetAngle();
+        if (use_category_cols_) {
+            color = manager[w.category_id];
+        } else {
+            color = w.color;
+        }
+        if (w.in_map) {
+            cv::ellipse(img, cv::Point2f(c[0], c[1]), cv::Size2f(axes[0], axes[1]), TO_DEG(angle), 0, 360, color, 2);
+        }
+        else
+            draw_ellipse_dashed(img, ell, color, 2);
+    }
+
+    return img;
 }
 
 } //namespace ORB_SLAM

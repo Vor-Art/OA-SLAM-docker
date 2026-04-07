@@ -23,7 +23,10 @@
 #include "Tracking.h"
 #include "MapPoint.h"
 #include "Atlas.h"
+#include "ImageDetections.h"
+#include "Ellipse.h"
 
+#include <Eigen/Dense>
 #include<opencv2/core/core.hpp>
 #include<opencv2/features2d/features2d.hpp>
 
@@ -37,6 +40,34 @@ namespace ORB_SLAM3
 class Tracking;
 class Viewer;
 
+struct DetectionWidget
+{
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    DetectionWidget(BBox2 bb, unsigned int idx, unsigned int cat, double s, cv::Scalar col, double thick, bool disp_info)
+        : bbox(bb), id(idx), category_id(cat), score(s), color(col), thickness(thick), display_info(disp_info) {}
+
+    BBox2 bbox;
+    unsigned int id;
+    unsigned int category_id;
+    double score;
+    cv::Scalar color;
+    double thickness;
+    bool display_info;
+};
+
+struct ObjectProjectionWidget
+{
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    ObjectProjectionWidget(const Ellipse& ell, unsigned int idx, unsigned int cat, cv::Scalar col, bool is_in_map, double unc)
+        : ellipse(ell), id(idx), category_id(cat), color(col), in_map(is_in_map), uncertainty(unc) {}
+    Ellipse ellipse;
+    unsigned int id;
+    unsigned int category_id;
+    cv::Scalar color;
+    bool in_map;
+    double uncertainty;
+};
+
 class FrameDrawer
 {
 public:
@@ -49,6 +80,11 @@ public:
     // Draw last processed frame.
     cv::Mat DrawFrame(float imageScale=1.f);
     cv::Mat DrawRightFrame(float imageScale=1.f);
+
+    cv::Mat DrawDetections(cv::Mat img);
+    cv::Mat DrawProjections(cv::Mat img);
+
+    void SetUseCategoryColors(bool use_cat_cols) { use_category_cols_ = use_cat_cols; }
 
     bool both;
 
@@ -83,6 +119,11 @@ protected:
 
     map<long unsigned int, cv::Point2f> mmProjectPoints;
     map<long unsigned int, cv::Point2f> mmMatchedInImage;
+
+    std::vector<DetectionWidget, Eigen::aligned_allocator<DetectionWidget>> detections_widgets_;
+    std::vector<ObjectProjectionWidget, Eigen::aligned_allocator<ObjectProjectionWidget>> object_projections_widgets_;
+    bool use_category_cols_ = false;
+    int frame_id_ = 0;
 
 };
 

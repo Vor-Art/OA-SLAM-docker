@@ -164,7 +164,7 @@ void Viewer::Run()
     mbFinished = false;
     mbStopped = false;
 
-    pangolin::CreateWindowAndBind("ORB-SLAM3: Map Viewer",1024,768);
+    pangolin::CreateWindowAndBind("OA-SLAM3: Map Viewer",1024,768);
 
     // 3D Mouse handler requires depth testing to be enabled
     glEnable(GL_DEPTH_TEST);
@@ -189,6 +189,17 @@ void Viewer::Run()
     pangolin::Var<bool> menuStep("menu.Step",false,false);
 
     pangolin::Var<bool> menuShowOptLba("menu.Show LBA opt", false, true);
+
+    pangolin::Var<bool> menuShowCamera("menu.Show Camera",true,true);
+    pangolin::Var<bool> menuShowObjectsPoints("menu.Show Obj-Points",true,true);
+    pangolin::Var<float> menuPointsSize("menu.Points Size", 1.61, 1e-1, 1e1, true);
+    pangolin::Var<float> menuObjectsPointsSize("menu.Obj-Points Size", 1.0, 1e-1, 1e1, true);
+    pangolin::Var<bool> menuShowObjects("menu.Show Objects",true,true);
+    pangolin::Var<bool> menuPause("menu.Pause",false,true);
+    pangolin::Var<bool> menuCatCol("menu.Color by Cat", false, true);
+    pangolin::Var<bool> menu3DBbox("menu.Disp 3D Bboxes", false, true);
+    pangolin::Var<bool> menuDistEstim("menu.Disp Distance Est.", false, true);
+    pangolin::Var<bool> menuQuit("menu.Quit",false,false);
     // Define Camera Render Object (for view / scene browsing)
     pangolin::OpenGlRenderState s_cam(
                 pangolin::ProjectionMatrix(1024,768,mViewpointF,mViewpointF,512,389,0.1,1000),
@@ -204,7 +215,7 @@ void Viewer::Run()
     Twc.SetIdentity();
     pangolin::OpenGlMatrix Ow; // Oriented with g in the z axis
     Ow.SetIdentity();
-    cv::namedWindow("ORB-SLAM3: Current Frame");
+    cv::namedWindow("OA-SLAM3: Current Frame");
 
     bool bFollow = true;
     bool bLocalizationMode = false;
@@ -309,11 +320,19 @@ void Viewer::Run()
 
         d_cam.Activate(s_cam);
         glClearColor(1.0f,1.0f,1.0f,1.0f);
-        mpMapDrawer->DrawCurrentCamera(Twc);
+        if (menuShowCamera)
+            mpMapDrawer->DrawCurrentCamera(Twc);
         if(menuShowKeyFrames || menuShowGraph || menuShowInertialGraph || menuShowOptLba)
             mpMapDrawer->DrawKeyFrames(menuShowKeyFrames,menuShowGraph, menuShowInertialGraph, menuShowOptLba);
         if(menuShowPoints)
-            mpMapDrawer->DrawMapPoints();
+            mpMapDrawer->DrawMapPoints(menuPointsSize, menuShowObjectsPoints);
+        if(menuShowObjectsPoints)
+            mpMapDrawer->DrawMapObjectsPoints(menuObjectsPointsSize);
+        if (menuShowObjects)
+            mpMapDrawer->DrawMapObjects();
+
+        if (menuDistEstim)
+            mpMapDrawer->DrawDistanceEstimation(mpTracker->GetCurrentMeanDepth(), mpTracker->mCurrentFrame.GetPose());
 
         pangolin::FinishFrame();
 
@@ -328,6 +347,11 @@ void Viewer::Run()
             toShow = im;
         }
 
+        if (menuShowObjects) {
+            mpFrameDrawer->DrawDetections(toShow);
+            mpFrameDrawer->DrawProjections(toShow);
+        }
+
         if(mImageViewerScale != 1.f)
         {
             int width = toShow.cols * mImageViewerScale;
@@ -335,7 +359,7 @@ void Viewer::Run()
             cv::resize(toShow, toShow, cv::Size(width, height));
         }
 
-        cv::imshow("ORB-SLAM3: Current Frame",toShow);
+        cv::imshow("OA-SLAM3: Current Frame",toShow);
         cv::waitKey(mT);
 
         if(menuReset)
@@ -366,6 +390,25 @@ void Viewer::Run()
             mpSystem->SaveTrajectoryEuRoC("CameraTrajectory.txt");
             mpSystem->SaveKeyFrameTrajectoryEuRoC("KeyFrameTrajectory.txt");
             menuStop = false;
+        }
+
+        if (menuPause) {
+            mbPaused = true;
+        } else {
+            mbPaused = false;
+        }
+
+        if (menuCatCol) {
+            mpMapDrawer->SetUseCategoryColors(true);
+            mpFrameDrawer->SetUseCategoryColors(true);
+        } else {
+            mpMapDrawer->SetUseCategoryColors(false);
+            mpFrameDrawer->SetUseCategoryColors(false);
+        }
+        mpMapDrawer->SetDisplay3DBbox(menu3DBbox);
+
+        if (menuQuit) {
+            this->RequestFinish();
         }
 
         if(Stop())
@@ -448,5 +491,15 @@ void Viewer::Release()
 {
     mbStopTrack = true;
 }*/
+
+bool Viewer::isPaused()
+{
+    return mbPaused;
+}
+
+bool Viewer::isStepByStep()
+{
+    return false;
+}
 
 }

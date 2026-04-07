@@ -61,6 +61,8 @@ public:
 
     void Release();
 
+    bool isPaused();
+
     //void SetTrackingPause();
 
     bool both;
@@ -93,6 +95,9 @@ private:
     std::mutex mMutexStop;
 
     bool mbStopTrack;
+
+    bool mbPaused = false;
+    bool use_class_col_ = false;
 
 };
 

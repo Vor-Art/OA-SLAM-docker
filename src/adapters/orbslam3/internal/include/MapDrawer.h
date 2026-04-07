@@ -24,6 +24,9 @@
 #include"MapPoint.h"
 #include"KeyFrame.h"
 #include "Settings.h"
+#include "MapObject.h"
+#include "Ellipsoid.h"
+#include "ColorManager.h"
 #include<pangolin/pangolin.h>
 
 #include<mutex>
@@ -43,12 +46,21 @@ public:
 
     Atlas* mpAtlas;
 
-    void DrawMapPoints();
+    void DrawMapPoints(double size = 2.0, bool ignore_objects_points = false);
+    void DrawMapObjectsPoints(double size);
     void DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba);
     void DrawCurrentCamera(pangolin::OpenGlMatrix &Twc);
     void SetCurrentCameraPose(const Sophus::SE3f &Tcw);
     void SetReferenceKeyFrame(KeyFrame *pKF);
     void GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M, pangolin::OpenGlMatrix &MOw);
+    void DrawMapObjects();
+    void DrawDistanceEstimation(double depth, const Sophus::SE3f& Tcw);
+    void SetUseCategoryColors(bool use_cat_cols) {
+        use_category_cols_ = use_cat_cols;
+    }
+    void SetDisplay3DBbox(bool disp_bbox) {
+        display_3d_bbox_ = disp_bbox;
+    }
 
 private:
 
@@ -64,6 +76,9 @@ private:
     Sophus::SE3f mCameraPose;
 
     std::mutex mMutexCamera;
+
+    bool use_category_cols_;
+    bool display_3d_bbox_;
 
     float mfFrameColors[6][3] = {{0.0f, 0.0f, 1.0f},
                                 {0.8f, 0.4f, 1.0f},
