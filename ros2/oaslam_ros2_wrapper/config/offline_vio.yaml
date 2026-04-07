@@ -1,0 +1,30 @@
+oaslam_offline_vio_node:
+  ros__parameters:
+    # ── Rosbag input ──
+    bag_path: ""  # REQUIRED: path to the rosbag directory (sqlite3 format)
+
+    # ── Topics inside the bag ──
+    rgb_topic: "/upper/realsense_upper/color/image_raw"
+    depth_topic: "/upper/realsense_upper/aligned_depth_to_color/image_raw"
+    imu_topic: "/upper/realsense_upper/imu"
+
+    # ── SLAM Backend ──
+    vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
+    camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/d435i_imu_rgbd.yaml"
+    use_viewer: true
+    use_imu: true
+
+    # ── Observation Source ──
+    observation_mode: "none"  # "onnx" for real-time detection, "file" for precomputed, "none" to disable
+    detection_model_path: ""
+    detection_file_path: ""
+    ignored_categories_file: ""
+
+    # ── Relocalization ──
+    relocalization_mode: "points_and_objects"  # "points", "objects", "points_and_objects"
+
+    # ── Output ──
+    output_folder: ""  # Set to a directory path to save CameraTrajectory.txt in TUM format
+
+    # ── Camera ID ──
+    camera_id: "rgbd0"
