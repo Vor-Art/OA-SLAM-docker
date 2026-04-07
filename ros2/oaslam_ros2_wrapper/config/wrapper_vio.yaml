@@ -16,6 +16,9 @@ oaslam_vio_node:
     # Relocalization
     relocalization_mode: "points_and_objects"  # "points", "objects", "points_and_objects"
 
+    # Output — set to a directory path to save CameraTrajectory.txt in TUM format
+    output_folder: ""
+
     # Topics
     rgb_topic: "/upper/realsense_upper/color/image_raw"
     depth_topic: "/upper/realsense_upper/aligned_depth_to_color/image_raw"

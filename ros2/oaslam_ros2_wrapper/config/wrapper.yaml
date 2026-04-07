@@ -11,5 +11,7 @@ oaslam_wrapper:
     onnx_model_path: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
     ignored_categories_file: ""
     relocalization_mode: points+objects
+    # Output — set to a directory path to save CameraTrajectory.txt in TUM format
+    output_folder: ""
     use_viewer: true
     use_sim_time: true

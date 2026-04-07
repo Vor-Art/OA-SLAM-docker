@@ -23,6 +23,11 @@ def generate_launch_description():
                 default_value="false",
                 description="Use ROS time from /clock.",
             ),
+            DeclareLaunchArgument(
+                "output_folder",
+                default_value="",
+                description="Directory to save CameraTrajectory.txt in TUM format. Empty to disable.",
+            ),
             Node(
                 package="oaslam_ros2_wrapper",
                 executable="oaslam_wrapper_node",
@@ -30,7 +35,10 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     LaunchConfiguration("params_file"),
-                    {"use_sim_time": LaunchConfiguration("use_sim_time")},
+                    {
+                        "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "output_folder": LaunchConfiguration("output_folder"),
+                    },
                 ],
             ),
         ]

@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <functional>
 #include <fstream>
+#include <iomanip>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -117,6 +118,25 @@ geometry_msgs::msg::PoseStamped ToPoseStamped(const std_msgs::msg::Header& heade
   return pose;
 }
 
+/// Write a single pose line in TUM format: timestamp tx ty tz qx qy qz qw
+void WriteTumPoseLine(std::ofstream& out, double timestamp,
+                      const oaslam::Transform4d& transform) {
+  Eigen::Matrix3d rotation;
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      rotation(row, col) = transform(row, col);
+    }
+  }
+
+  Eigen::Quaterniond q(rotation);
+  q.normalize();
+
+  out << std::fixed << std::setprecision(6) << timestamp << " "
+      << std::setprecision(9)
+      << transform(0, 3) << " " << transform(1, 3) << " " << transform(2, 3) << " "
+      << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
+}
+
 }  // namespace
 
 class OaSlamVioNode : public rclcpp::Node {
@@ -135,6 +155,20 @@ class OaSlamVioNode : public rclcpp::Node {
     pose_topic_ = declare_parameter<std::string>("pose_topic", "/oaslam/pose");
     world_frame_id_ = declare_parameter<std::string>("world_frame_id", "map");
     camera_id_ = declare_parameter<std::string>("camera_id", "rgbd0");
+    const std::string output_folder =
+        declare_parameter<std::string>("output_folder", "");
+
+    // Open TUM trajectory file if output folder is specified
+    if (!IsEmptyPath(output_folder)) {
+      std::filesystem::create_directories(output_folder);
+      const std::string tum_path = output_folder + "/CameraTrajectory.txt";
+      tum_trajectory_file_.open(tum_path, std::ios::out | std::ios::trunc);
+      if (!tum_trajectory_file_.is_open()) {
+        throw std::runtime_error("Failed to open TUM trajectory file: " + tum_path);
+      }
+      tum_trajectory_file_ << "# TUM trajectory format: timestamp tx ty tz qx qy qz qw\n";
+      RCLCPP_INFO(get_logger(), "Saving camera trajectory (TUM format) to: %s", tum_path.c_str());
+    }
 
     const std::string vocabulary_file =
         declare_parameter<std::string>("vocabulary_file", "/app/Vocabulary/ORBvoc.txt");
@@ -233,6 +267,11 @@ class OaSlamVioNode : public rclcpp::Node {
   }
 
   ~OaSlamVioNode() override {
+    if (tum_trajectory_file_.is_open()) {
+      tum_trajectory_file_.flush();
+      tum_trajectory_file_.close();
+      RCLCPP_INFO(get_logger(), "Camera trajectory file closed.");
+    }
     if (session_) {
       session_->shutdown();
     }
@@ -313,6 +352,11 @@ class OaSlamVioNode : public rclcpp::Node {
     // Publish pose
     pose_publisher_->publish(
         ToPoseStamped(rgb_msg->header, world_frame_id_, result.tracking.T_world_camera));
+
+    // Write pose to TUM trajectory file
+    if (tum_trajectory_file_.is_open()) {
+      WriteTumPoseLine(tum_trajectory_file_, image_timestamp, result.tracking.T_world_camera);
+    }
   }
 
   void WarnIfNoImagesReceived() {
@@ -357,6 +401,9 @@ class OaSlamVioNode : public rclcpp::Node {
   std::string pose_topic_;
   std::string world_frame_id_;
   std::string camera_id_;
+
+  // TUM trajectory output
+  std::ofstream tum_trajectory_file_;
 
   // State
   std::uint64_t frame_counter_ = 0;
