@@ -34,6 +34,7 @@ class OrbSlam3BackendAdapter final : public ISlamBackend {
       const std::vector<PoseProposal>& pose_proposals) override;
   void reset() override;
   void shutdown() override;
+  int keyframesInQueue() const override;
 
   bool shouldQuit() const;
 

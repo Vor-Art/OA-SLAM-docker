@@ -10,6 +10,8 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
+#include <unistd.h>
+
 #include <cmath>
 #include <cstdint>
 #include <chrono>
@@ -137,6 +139,15 @@ void WriteTumPoseLine(std::ofstream& out, double timestamp,
       << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
 }
 
+/// Maximum number of keyframes allowed in the LocalMapping queue before
+/// the ROS2 callback starts waiting.  Keeping this small ensures that
+/// LocalMapping is never far behind Tracking.
+constexpr int kMaxKeyframeQueueDepth = 2;
+
+/// How long to sleep (µs) between queue-depth polls while waiting for
+/// LocalMapping to drain.
+constexpr int kBackpressureSleepUs = 50;
+
 }  // namespace
 
 class OaSlamVioNode : public rclcpp::Node {
@@ -231,21 +242,23 @@ class OaSlamVioNode : public rclcpp::Node {
     pose_publisher_ = create_publisher<geometry_msgs::msg::PoseStamped>(pose_topic_, 10);
 
     // Set up IMU subscription (independent, not synchronized — arrives at 200Hz)
-    rclcpp::QoS imu_qos(100);
+    // Large queue to buffer IMU during backpressure waits
+    rclcpp::QoS imu_qos(500);
     imu_qos.best_effort();
     imu_subscription_ = create_subscription<sensor_msgs::msg::Imu>(
         imu_topic_, imu_qos,
         std::bind(&OaSlamVioNode::HandleImu, this, std::placeholders::_1));
 
     // Set up synchronized RGB + Depth subscriptions using message_filters
-    rclcpp::QoS image_qos(10);
-    image_qos.best_effort();
+    // Large queue (500) to prevent message drops during backpressure waits
+    rmw_qos_profile_t sensor_qos_500 = rmw_qos_profile_sensor_data;
+    sensor_qos_500.depth = 500;
 
-    rgb_sub_.subscribe(this, rgb_topic_, rmw_qos_profile_sensor_data);
-    depth_sub_.subscribe(this, depth_topic_, rmw_qos_profile_sensor_data);
+    rgb_sub_.subscribe(this, rgb_topic_, sensor_qos_500);
+    depth_sub_.subscribe(this, depth_topic_, sensor_qos_500);
 
     sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(
-        SyncPolicy(10), rgb_sub_, depth_sub_);
+        SyncPolicy(500), rgb_sub_, depth_sub_);
     sync_->registerCallback(
         std::bind(&OaSlamVioNode::HandleSyncedImages, this, std::placeholders::_1,
                   std::placeholders::_2));
@@ -342,6 +355,14 @@ class OaSlamVioNode : public rclcpp::Node {
     frame.has_depth = true;
     frame.imu_measurements = std::move(imu_measurements);
     frame.has_imu = !frame.imu_measurements.empty();
+
+    // Backpressure: wait until LocalMapping has drained its keyframe queue.
+    // This ensures that regardless of bag playback speed (-r), the Tracking
+    // thread always sees the same LocalMapping state (idle vs busy), making
+    // SLAM results deterministic.
+    while (session_->keyframesInQueue() > kMaxKeyframeQueueDepth) {
+      usleep(kBackpressureSleepUs);
+    }
 
     // Process frame through the OA-SLAM pipeline
     const auto result = session_->processFrame(frame);

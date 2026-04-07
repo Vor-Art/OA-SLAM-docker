@@ -18,6 +18,11 @@ class ISlamBackend {
       const std::vector<PoseProposal>& pose_proposals) = 0;
   virtual void reset() = 0;
   virtual void shutdown() = 0;
+
+  /// Returns the number of keyframes waiting in the local mapping queue.
+  /// Used for backpressure: callers can throttle frame feeding when the queue
+  /// is deep. Default returns 0 (no backpressure information available).
+  virtual int keyframesInQueue() const { return 0; }
 };
 
 }  // namespace oaslam

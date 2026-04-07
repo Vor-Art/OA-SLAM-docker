@@ -235,6 +235,10 @@ public:
          return mShouldQuit;
     }
 
+    /// Returns the number of keyframes waiting in the LocalMapping queue.
+    /// Used for backpressure: callers can throttle frame feeding when the queue is deep.
+    int GetLocalMappingKeyframesInQueue();
+
 #ifdef REGISTER_TIMES
     void InsertRectTime(double& time);
     void InsertResizeTime(double& time);

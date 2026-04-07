@@ -624,6 +624,12 @@ bool System::isShutDown() {
     return mbShutDown;
 }
 
+int System::GetLocalMappingKeyframesInQueue() {
+    if (mpLocalMapper)
+        return mpLocalMapper->KeyframesInQueue();
+    return 0;
+}
+
 void System::SaveTrajectoryTUM(const string &filename)
 {
     cout << endl << "Saving camera trajectory to " << filename << " ..." << endl;

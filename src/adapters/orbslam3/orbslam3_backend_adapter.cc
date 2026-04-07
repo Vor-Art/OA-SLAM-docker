@@ -136,6 +136,13 @@ bool OrbSlam3BackendAdapter::shouldQuit() const {
   return system_ && system_->isShutDown();
 }
 
+int OrbSlam3BackendAdapter::keyframesInQueue() const {
+  if (system_) {
+    return system_->GetLocalMappingKeyframesInQueue();
+  }
+  return 0;
+}
+
 TrackingState OrbSlam3BackendAdapter::mapTrackingState(
     int orbslam3_state) const {
   // ORB-SLAM3 Tracking::eTrackingState:

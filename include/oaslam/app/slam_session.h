@@ -14,6 +14,10 @@ class SlamSession {
   void reset();
   void shutdown();
 
+  /// Returns the number of keyframes waiting in the SLAM backend's local
+  /// mapping queue. Returns 0 if the backend does not support this query.
+  int keyframesInQueue() const;
+
  private:
   SessionConfig config_;
   ModuleBundle modules_;

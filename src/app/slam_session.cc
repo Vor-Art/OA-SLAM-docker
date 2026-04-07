@@ -79,4 +79,11 @@ void SlamSession::shutdown() {
   is_shutdown_ = true;
 }
 
+int SlamSession::keyframesInQueue() const {
+  if (modules_.slam_backend) {
+    return modules_.slam_backend->keyframesInQueue();
+  }
+  return 0;
+}
+
 }  // namespace oaslam
