@@ -10,6 +10,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
+#include <cmath>
 #include <cstdint>
 #include <chrono>
 #include <filesystem>
@@ -249,6 +250,16 @@ class OaSlamVioNode : public rclcpp::Node {
     m.gyro_x = msg->angular_velocity.x;
     m.gyro_y = msg->angular_velocity.y;
     m.gyro_z = msg->angular_velocity.z;
+
+    // Filter out NaN/Inf IMU readings (can come from faulty sensor data)
+    if (!std::isfinite(m.acc_x) || !std::isfinite(m.acc_y) || !std::isfinite(m.acc_z) ||
+        !std::isfinite(m.gyro_x) || !std::isfinite(m.gyro_y) || !std::isfinite(m.gyro_z) ||
+        !std::isfinite(m.timestamp)) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
+                           "Dropping IMU message with NaN/Inf values");
+      return;
+    }
+
     imu_buffer_.push(m);
   }
 
