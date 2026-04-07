@@ -11,6 +11,16 @@
 /// images are kept in a small sliding window, and each RGB image triggers
 /// immediate frame processing.
 ///
+/// Robustness features:
+///   - Automatic depth topic fallback: when the configured depth topic is
+///     absent from the bag, the node scans for other sensor_msgs/msg/Image
+///     topics and uses the sole remaining candidate (e.g. "/" from a
+///     recording bug).  An explicit `depth_topic_override` parameter is also
+///     supported.
+///   - Null depth guard: frames without a valid depth match are skipped
+///     entirely rather than passing an empty cv::Mat to ORB-SLAM3.
+///   - Configurable max_depth_dt_sec for temporal synchronization.
+///
 /// Usage (launch):
 ///   ros2 launch oaslam_ros2_wrapper oaslam_offline_vio.launch.py \
 ///       bag_path:=/path/to/rosbag  output_folder:=/path/to/output
@@ -53,7 +63,7 @@
 #include "oaslam/core/frame_packet.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers (same as in oaslam_vio_node.cpp)
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 namespace {
 
@@ -119,13 +129,9 @@ constexpr int kMaxKeyframeQueueDepth = 2;
 constexpr int kBackpressureSleepUs = 50;
 
 /// Maximum number of recent depth images to keep in the sliding window.
-/// Depth images arriving before the window fills are kept; once full the
-/// oldest entry is evicted.  10 is generous — at 30 fps depth this covers
-/// ~333 ms of depth history.
 constexpr size_t kMaxDepthWindowSize = 10;
 
-/// Maximum number of IMU samples to buffer.  At 200 Hz IMU and 30 fps
-/// camera this is ~66 s of IMU data — far more than needed between frames.
+/// Maximum number of IMU samples to buffer.
 constexpr size_t kMaxImuBufferSize = 20000;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,6 +166,84 @@ struct TimestampedDepth {
   std::shared_ptr<rosbag2_storage::SerializedBagMessage> msg;
 };
 
+/// Resolve the effective depth topic.
+///
+/// Priority:
+///   1. depth_topic_override (if non-empty and exists in bag)
+///   2. depth_topic (if it exists in the bag)
+///   3. Automatic fallback: scan all bag topics for sensor_msgs/msg/Image
+///      types that are NOT the rgb_topic.  If exactly one candidate remains,
+///      use it.
+///
+/// Returns the resolved topic name, or empty string on failure.
+std::string ResolveDepthTopic(
+    const std::string& depth_topic,
+    const std::string& depth_topic_override,
+    const std::string& rgb_topic,
+    const std::map<std::string, std::string>& topic_type_map,
+    rclcpp::Logger logger) {
+
+  // 1. Explicit override takes highest priority
+  if (!depth_topic_override.empty()) {
+    if (topic_type_map.find(depth_topic_override) != topic_type_map.end()) {
+      RCLCPP_WARN(logger,
+                  "Using depth_topic_override='%s' (overrides configured depth_topic='%s')",
+                  depth_topic_override.c_str(), depth_topic.c_str());
+      return depth_topic_override;
+    } else {
+      RCLCPP_ERROR(logger,
+                   "depth_topic_override='%s' not found in bag! Falling back to auto-detection.",
+                   depth_topic_override.c_str());
+    }
+  }
+
+  // 2. Configured depth_topic exists in bag
+  if (topic_type_map.find(depth_topic) != topic_type_map.end()) {
+    return depth_topic;
+  }
+
+  // 3. Auto-detect: find all sensor_msgs/msg/Image topics that are not the RGB topic
+  RCLCPP_WARN(logger,
+              "Configured depth_topic='%s' not found in bag. Attempting auto-detection...",
+              depth_topic.c_str());
+
+  std::vector<std::string> image_candidates;
+  for (const auto& [name, type] : topic_type_map) {
+    if (type == "sensor_msgs/msg/Image" && name != rgb_topic) {
+      image_candidates.push_back(name);
+    }
+  }
+
+  if (image_candidates.size() == 1) {
+    RCLCPP_WARN(logger,
+                "Auto-detected depth topic: '%s' (only non-RGB Image topic in bag). "
+                "To suppress this warning, set depth_topic_override='%s' in your YAML config.",
+                image_candidates[0].c_str(), image_candidates[0].c_str());
+    return image_candidates[0];
+  }
+
+  if (image_candidates.empty()) {
+    RCLCPP_ERROR(logger,
+                 "No candidate depth topics found (no sensor_msgs/msg/Image topics besides RGB).");
+  } else {
+    RCLCPP_ERROR(logger,
+                 "Multiple candidate depth topics found (%zu). Cannot auto-select. "
+                 "Please set depth_topic_override explicitly. Candidates:",
+                 image_candidates.size());
+    for (const auto& c : image_candidates) {
+      RCLCPP_ERROR(logger, "  %s", c.c_str());
+    }
+  }
+
+  // Log all available topics for debugging
+  RCLCPP_WARN(logger, "All topics in bag:");
+  for (const auto& [name, type] : topic_type_map) {
+    RCLCPP_WARN(logger, "  %s [%s]", name.c_str(), type.c_str());
+  }
+
+  return "";  // No valid depth topic found
+}
+
 }  // namespace
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,6 +268,18 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     depth_topic_ = declare_parameter<std::string>(
         "depth_topic", "/camera/aligned_depth_to_color/image_raw");
     imu_topic_ = declare_parameter<std::string>("imu_topic", "/camera/imu");
+
+    // ── Depth topic override (workaround for recording bugs) ──
+    // When the depth images were recorded under a wrong topic name (e.g. "/"
+    // due to a topic remapping bug), set this to the actual topic name in the
+    // bag.  This takes priority over depth_topic.
+    depth_topic_override_ = declare_parameter<std::string>("depth_topic_override", "");
+
+    // ── Synchronization parameters ──
+    // Maximum allowable time difference (seconds) between an RGB frame and
+    // its nearest depth frame.  Default 33ms matches 30fps.  Frames without
+    // a depth match within this window are skipped.
+    max_depth_dt_sec_ = declare_parameter<double>("max_depth_dt_sec", 0.033);
 
     // ── Camera / SLAM config ──
     camera_id_ = declare_parameter<std::string>("camera_id", "rgbd0");
@@ -258,13 +354,18 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 "  Bag:   %s\n"
                 "  RGB:   %s\n"
                 "  Depth: %s\n"
-                "  IMU:   %s",
+                "  Depth override: %s\n"
+                "  IMU:   %s\n"
+                "  Max depth dt: %.3f s",
                 use_imu ? "enabled" : "disabled",
                 bag_path_.c_str(), rgb_topic_.c_str(),
-                depth_topic_.c_str(), imu_topic_.c_str());
+                depth_topic_.c_str(),
+                depth_topic_override_.empty() ? "(none)" : depth_topic_override_.c_str(),
+                imu_topic_.c_str(),
+                max_depth_dt_sec_);
   }
 
-  /// Run the full offline pipeline: open bag → stream → process → save.
+  /// Run the full offline pipeline: open bag -> stream -> process -> save.
   void Run() {
     RCLCPP_INFO(get_logger(), "Opening rosbag: %s", bag_path_.c_str());
 
@@ -272,7 +373,6 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     rosbag2_cpp::Reader reader;
     rosbag2_storage::StorageOptions storage_opts;
     storage_opts.uri = bag_path_;
-    storage_opts.storage_id = "sqlite3";
 
     rosbag2_cpp::ConverterOptions converter_opts;
     converter_opts.input_serialization_format = "cdr";
@@ -287,46 +387,53 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       topic_type_map[info.name] = info.type;
     }
 
-    // Verify required topics exist
-    auto CheckTopic = [&](const std::string& topic, const std::string& label) {
-      if (topic_type_map.find(topic) == topic_type_map.end()) {
-        RCLCPP_WARN(get_logger(), "%s topic '%s' not found in bag. Available topics:",
-                    label.c_str(), topic.c_str());
-        for (const auto& [name, type] : topic_type_map) {
-          RCLCPP_WARN(get_logger(), "  %s [%s]", name.c_str(), type.c_str());
-        }
-      }
-    };
-    CheckTopic(rgb_topic_, "RGB");
-    CheckTopic(depth_topic_, "Depth");
-    CheckTopic(imu_topic_, "IMU");
+    // ── Resolve the effective depth topic ──
+    const std::string effective_depth_topic = ResolveDepthTopic(
+        depth_topic_, depth_topic_override_, rgb_topic_,
+        topic_type_map, get_logger());
+
+    if (effective_depth_topic.empty()) {
+      RCLCPP_ERROR(get_logger(),
+                   "FATAL: Could not resolve a valid depth topic. "
+                   "Set 'depth_topic_override' parameter to the correct topic name. "
+                   "Aborting.");
+      // Graceful shutdown instead of segfault
+      session_->shutdown();
+      session_.reset();
+      return;
+    }
+
+    RCLCPP_INFO(get_logger(), "Effective depth topic: '%s'", effective_depth_topic.c_str());
+
+    // Verify RGB and IMU topics exist
+    if (topic_type_map.find(rgb_topic_) == topic_type_map.end()) {
+      RCLCPP_ERROR(get_logger(), "RGB topic '%s' not found in bag! Aborting.",
+                   rgb_topic_.c_str());
+      session_->shutdown();
+      session_.reset();
+      return;
+    }
+    if (topic_type_map.find(imu_topic_) == topic_type_map.end()) {
+      RCLCPP_WARN(get_logger(), "IMU topic '%s' not found in bag. Proceeding without IMU.",
+                  imu_topic_.c_str());
+    }
 
     // ── Streaming state ──
-    // Instead of loading all messages into memory, we stream them one at a
-    // time.  IMU samples are accumulated in a bounded deque, depth images
-    // are kept in a small sliding window, and each RGB image triggers
-    // immediate frame processing.
-
-    // IMU buffer — bounded deque of deserialized measurements
     std::deque<oaslam::ImuMeasurement> imu_buffer;
-
-    // Depth sliding window — small deque of recent serialized depth messages
     std::deque<TimestampedDepth> depth_window;
 
     // Counters
     uint64_t frame_counter = 0;
     uint64_t total_rgb_in_bag = 0;
     uint64_t total_frames_processed = 0;
+    uint64_t total_frames_skipped_no_depth = 0;
     uint64_t total_poses_obtained = 0;
     uint64_t total_poses_interpolated = 0;
-    uint64_t depth_match_failures = 0;
     uint64_t total_imu_in_bag = 0;
     uint64_t total_depth_in_bag = 0;
     uint64_t imu_nan_filtered = 0;
 
-    // Last known good pose — used as fallback for frames where tracking
-    // fails, ensuring 1:1 correspondence between image frames and
-    // trajectory lines.
+    // Last known good pose
     oaslam::Transform4d last_known_pose = oaslam::Transform4d::eye();
 
     bool quit_requested = false;
@@ -376,8 +483,6 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
 
         imu_buffer.push_back(m);
 
-        // Evict oldest if buffer exceeds limit (should not happen in
-        // normal operation — IMU is drained on every RGB frame)
         while (imu_buffer.size() > kMaxImuBufferSize) {
           imu_buffer.pop_front();
         }
@@ -386,15 +491,14 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       }
 
       // ────────────────────────────────────────────────────────────────
-      // Depth message
+      // Depth message (using resolved effective topic)
       // ────────────────────────────────────────────────────────────────
-      if (topic == depth_topic_) {
+      if (topic == effective_depth_topic) {
         total_depth_in_bag++;
 
         const double ts = NanosToSeconds(bag_msg->time_stamp);
         depth_window.push_back({ts, bag_msg});
 
-        // Evict oldest entries beyond the sliding window size
         while (depth_window.size() > kMaxDepthWindowSize) {
           depth_window.pop_front();
         }
@@ -411,7 +515,6 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         const double image_timestamp = NanosToSeconds(bag_msg->time_stamp);
 
         // ── 1. Find closest depth image in the sliding window ──
-        constexpr double kMaxDepthMatchSec = 0.1;  // 100ms tolerance
         double best_dt = std::numeric_limits<double>::max();
         size_t best_depth_idx = 0;
         bool found_depth = false;
@@ -425,16 +528,47 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           }
         }
 
-        // ── 2. Deserialize RGB ──
+        // ── 2. Null depth guard: skip frame if no valid depth match ──
+        if (!found_depth || best_dt > max_depth_dt_sec_) {
+          total_frames_skipped_no_depth++;
+          if (total_frames_skipped_no_depth <= 10) {
+            if (!found_depth) {
+              RCLCPP_WARN(get_logger(),
+                          "Frame %lu (t=%.6f): no depth candidates in buffer "
+                          "(depth_window size=%zu). Skipping frame.",
+                          static_cast<unsigned long>(frame_counter),
+                          image_timestamp,
+                          depth_window.size());
+            } else {
+              RCLCPP_WARN(get_logger(),
+                          "Frame %lu (t=%.6f): nearest depth dt=%.6fs exceeds "
+                          "max_depth_dt_sec=%.3fs. Skipping frame.",
+                          static_cast<unsigned long>(frame_counter),
+                          image_timestamp, best_dt, max_depth_dt_sec_);
+            }
+          }
+          if (total_frames_skipped_no_depth == 10) {
+            RCLCPP_WARN(get_logger(),
+                        "Suppressing further 'no depth' warnings (10 already logged).");
+          }
+
+          // Write fallback trajectory line for skipped frame
+          total_poses_interpolated++;
+          if (tum_file_.is_open()) {
+            WriteTumPoseLine(tum_file_, image_timestamp, last_known_pose);
+          }
+          frame_counter++;
+          continue;  // SKIP — do NOT pass null depth to SLAM
+        }
+
+        // ── 3. Deserialize RGB ──
         auto rgb_msg = DeserializeMessage<sensor_msgs::msg::Image>(bag_msg);
         cv_bridge::CvImageConstPtr cv_rgb;
         try {
           cv_rgb = cv_bridge::toCvCopy(rgb_msg, "bgr8");
         } catch (const cv_bridge::Exception& exc) {
           RCLCPP_WARN(get_logger(), "Frame %lu: failed to convert RGB: %s",
-                      frame_counter, exc.what());
-          // Still write a trajectory line for this frame
-          total_frames_processed++;
+                      static_cast<unsigned long>(frame_counter), exc.what());
           total_poses_interpolated++;
           if (tum_file_.is_open()) {
             WriteTumPoseLine(tum_file_, image_timestamp, last_known_pose);
@@ -443,10 +577,10 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           continue;
         }
 
-        // ── 3. Deserialize depth (if match found within tolerance) ──
+        // ── 4. Deserialize depth ──
         cv::Mat depth_mat;
         bool has_depth = false;
-        if (found_depth && best_dt <= kMaxDepthMatchSec) {
+        {
           auto depth_msg = DeserializeMessage<sensor_msgs::msg::Image>(
               depth_window[best_depth_idx].msg);
           try {
@@ -455,34 +589,57 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
             has_depth = true;
           } catch (const cv_bridge::Exception& exc) {
             RCLCPP_WARN(get_logger(), "Frame %lu: failed to convert depth: %s",
-                        frame_counter, exc.what());
-          }
-
-          // Evict depth entries older than the matched one — they will
-          // never be a better match for any future RGB (which has a later
-          // timestamp).  Keep the matched entry itself in case the next
-          // RGB is very close in time.
-          while (depth_window.size() > 1 &&
-                 depth_window.front().timestamp_sec <
-                     depth_window[best_depth_idx].timestamp_sec) {
-            // Recalculate best_depth_idx after pop since indices shift
-            if (best_depth_idx > 0) {
-              depth_window.pop_front();
-              best_depth_idx--;
-            } else {
-              break;
-            }
-          }
-        } else {
-          depth_match_failures++;
-          if (depth_match_failures <= 5) {
-            RCLCPP_WARN(get_logger(),
-                        "Frame %lu: no depth match (best dt=%.3fs). Using empty depth.",
-                        frame_counter, best_dt);
+                        static_cast<unsigned long>(frame_counter), exc.what());
           }
         }
 
-        // ── 4. Drain IMU up to image timestamp ──
+        // ── 5. Validate depth dimensions match RGB ──
+        if (has_depth) {
+          if (depth_mat.empty()) {
+            RCLCPP_WARN(get_logger(),
+                        "Frame %lu: depth image deserialized but is empty. Skipping frame.",
+                        static_cast<unsigned long>(frame_counter));
+            has_depth = false;
+          } else if (depth_mat.rows != cv_rgb->image.rows ||
+                     depth_mat.cols != cv_rgb->image.cols) {
+            RCLCPP_WARN(get_logger(),
+                        "Frame %lu: depth size (%dx%d) != RGB size (%dx%d). Skipping frame.",
+                        static_cast<unsigned long>(frame_counter),
+                        depth_mat.cols, depth_mat.rows,
+                        cv_rgb->image.cols, cv_rgb->image.rows);
+            has_depth = false;
+          }
+        }
+
+        // ── 6. Final null-depth guard: skip if no valid depth ──
+        if (!has_depth) {
+          total_frames_skipped_no_depth++;
+          total_poses_interpolated++;
+          if (tum_file_.is_open()) {
+            WriteTumPoseLine(tum_file_, image_timestamp, last_known_pose);
+          }
+          frame_counter++;
+          continue;  // SKIP — do NOT pass invalid depth to SLAM
+        }
+
+        // ── 7. Evict stale depth entries ──
+        // Depth entries older than the matched one will never be a better
+        // match for any future RGB (which has a later timestamp).
+        while (depth_window.size() > 1 &&
+               depth_window.front().timestamp_sec <
+                   depth_window[best_depth_idx].timestamp_sec) {
+          if (best_depth_idx > 0) {
+            depth_window.pop_front();
+            best_depth_idx--;
+          } else {
+            break;
+          }
+        }
+
+        // ── 8. Drain IMU up to image timestamp (pre-integration batch) ──
+        // Collect all IMU measurements between the previous frame and the
+        // current frame.  These are passed as a vector to the SLAM system
+        // which performs IMU pre-integration internally.
         std::vector<oaslam::ImuMeasurement> imu_for_frame;
         while (!imu_buffer.empty() &&
                imu_buffer.front().timestamp <= image_timestamp) {
@@ -490,29 +647,27 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           imu_buffer.pop_front();
         }
 
-        // ── 5. Build FramePacket ──
+        // ── 9. Build FramePacket ──
         oaslam::FramePacket frame;
         frame.frame_id = frame_counter++;
         frame.timestamp = image_timestamp;
         frame.camera_id = camera_id_;
         frame.image = cv_rgb->image.clone();
-        if (has_depth) {
-          frame.depth_image = depth_mat.clone();
-          frame.has_depth = true;
-        }
+        frame.depth_image = depth_mat.clone();
+        frame.has_depth = true;
         frame.imu_measurements = std::move(imu_for_frame);
         frame.has_imu = !frame.imu_measurements.empty();
 
-        // ── 6. Backpressure ──
+        // ── 10. Backpressure ──
         while (session_->keyframesInQueue() > kMaxKeyframeQueueDepth) {
           usleep(kBackpressureSleepUs);
         }
 
-        // ── 7. Process frame ──
+        // ── 11. Process frame ──
         const auto result = session_->processFrame(frame);
         total_frames_processed++;
 
-        // ── 8. Write trajectory line (ALWAYS — 1:1 with RGB images) ──
+        // ── 12. Write trajectory line (ALWAYS — 1:1 with RGB images) ──
         if (result.tracking.has_pose) {
           total_poses_obtained++;
           last_known_pose = result.tracking.T_world_camera;
@@ -524,15 +679,18 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           WriteTumPoseLine(tum_file_, image_timestamp, last_known_pose);
         }
 
-        // ── 9. Progress logging ──
+        // ── 13. Progress logging ──
         if (total_frames_processed % 100 == 0) {
           auto now = std::chrono::steady_clock::now();
           double elapsed_sec = std::chrono::duration<double>(now - wall_start).count();
           double fps = total_frames_processed / elapsed_sec;
           RCLCPP_INFO(get_logger(),
-                      "Progress: %lu frames processed, %lu poses, %.1f fps",
-                      total_frames_processed,
-                      total_poses_obtained, fps);
+                      "Progress: %lu frames processed, %lu poses, %lu skipped (no depth), "
+                      "%.1f fps",
+                      static_cast<unsigned long>(total_frames_processed),
+                      static_cast<unsigned long>(total_poses_obtained),
+                      static_cast<unsigned long>(total_frames_skipped_no_depth),
+                      fps);
         }
 
         // Check if SLAM requested quit
@@ -558,19 +716,24 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 "  Depth images in bag: %lu\n"
                 "  IMU samples in bag: %lu (NaN filtered: %lu)\n"
                 "  Frames processed:  %lu\n"
+                "  Frames skipped (no depth): %lu\n"
                 "  Poses (tracked):   %lu\n"
                 "  Poses (fallback):  %lu\n"
-                "  Depth mismatches:  %lu\n"
+                "  Effective depth topic: %s\n"
                 "  Trajectory lines:  %lu (1:1 with RGB)\n"
                 "  Wall time:         %.1f s\n"
                 "  Average FPS:       %.1f\n"
                 "========================================",
-                total_rgb_in_bag,
-                total_depth_in_bag,
-                total_imu_in_bag, imu_nan_filtered,
-                total_frames_processed, total_poses_obtained,
-                total_poses_interpolated, depth_match_failures,
-                total_frames_processed,
+                static_cast<unsigned long>(total_rgb_in_bag),
+                static_cast<unsigned long>(total_depth_in_bag),
+                static_cast<unsigned long>(total_imu_in_bag),
+                static_cast<unsigned long>(imu_nan_filtered),
+                static_cast<unsigned long>(total_frames_processed),
+                static_cast<unsigned long>(total_frames_skipped_no_depth),
+                static_cast<unsigned long>(total_poses_obtained),
+                static_cast<unsigned long>(total_poses_interpolated),
+                effective_depth_topic.c_str(),
+                static_cast<unsigned long>(total_rgb_in_bag),
                 total_sec,
                 total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0);
 
@@ -581,9 +744,11 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       RCLCPP_INFO(get_logger(), "Camera trajectory file saved and closed.");
     }
 
-    // Shutdown SLAM
+    // Graceful shutdown
+    RCLCPP_INFO(get_logger(), "Shutting down SLAM session...");
     session_->shutdown();
     session_.reset();
+    RCLCPP_INFO(get_logger(), "SLAM session shut down cleanly.");
   }
 
  private:
@@ -593,8 +758,10 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
   std::string bag_path_;
   std::string rgb_topic_;
   std::string depth_topic_;
+  std::string depth_topic_override_;
   std::string imu_topic_;
   std::string camera_id_;
+  double max_depth_dt_sec_ = 0.033;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

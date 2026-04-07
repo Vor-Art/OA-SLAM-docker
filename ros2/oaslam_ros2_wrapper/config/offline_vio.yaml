@@ -8,6 +8,25 @@ oaslam_offline_vio_node:
     depth_topic: "/upper/realsense_upper/aligned_depth_to_color/image_raw"
     imu_topic: "/upper/realsense_upper/imu"
 
+    # ── Depth topic override (workaround for recording bugs) ──
+    # When the depth images were recorded under a wrong topic name (e.g. "/"
+    # due to a topic remapping bug in ros2 bag record), set this to the
+    # actual topic name present in the bag's metadata.yaml.
+    #
+    # This takes priority over depth_topic.  If left empty, the node will
+    # first try depth_topic, then auto-detect by scanning for non-RGB
+    # sensor_msgs/msg/Image topics.
+    #
+    # For the dynamic_robot_1_uncompressed bag where depth landed on "/":
+    depth_topic_override: "/"
+
+    # ── Temporal synchronization ──
+    # Maximum allowable time difference (seconds) between an RGB frame and
+    # its nearest depth frame for them to be considered a matched pair.
+    # Default 33ms matches 30fps cameras.  Increase if RGB and depth have
+    # different frame rates or significant timestamp jitter.
+    max_depth_dt_sec: 0.033
+
     # ── SLAM Backend ──
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
     camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/d435i_imu_rgbd.yaml"
