@@ -356,9 +356,7 @@ int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
 
   try {
-    rclcpp::NodeOptions options;
-    options.automatically_declare_parameters_from_overrides(true);
-    auto node = std::make_shared<OaSlamVioNode>(options);
+    auto node = std::make_shared<OaSlamVioNode>(rclcpp::NodeOptions{});
     rclcpp::spin(node);
   } catch (const std::exception& exc) {
     RCLCPP_FATAL(rclcpp::get_logger("oaslam_vio_node"), "Failed to start VIO node: %s",

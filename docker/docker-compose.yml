@@ -63,6 +63,7 @@ services:
       ROS_HOME: /home/oaslam/.ros
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       USE_SIM_TIME: ${USE_SIM_TIME:-false}
+      OASLAM_ROS2_LAUNCH_FILE: ${OASLAM_ROS2_LAUNCH_FILE:-oaslam_wrapper.launch.py}
       OASLAM_ROS2_PARAMS_FILE: ${OASLAM_ROS2_PARAMS_FILE:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper.yaml}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw

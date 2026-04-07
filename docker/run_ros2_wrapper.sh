@@ -12,9 +12,10 @@ export ROS_HOME="${ROS_HOME:-${HOME}/.ros}"
 mkdir -p "${HOME}" "${ROS_HOME}"
 export LD_LIBRARY_PATH="/opt/OA-SLAM/Thirdparty/DBoW2/lib:/opt/OA-SLAM/Thirdparty/g2o/lib:/opt/OA-SLAM/lib:${LD_LIBRARY_PATH:-}"
 
+LAUNCH_FILE="${OASLAM_ROS2_LAUNCH_FILE:-oaslam_wrapper.launch.py}"
 PARAMS_FILE="${OASLAM_ROS2_PARAMS_FILE:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper.yaml}"
 USE_SIM_TIME="${USE_SIM_TIME:-false}"
 
-exec ros2 launch oaslam_ros2_wrapper oaslam_wrapper.launch.py \
+exec ros2 launch oaslam_ros2_wrapper "${LAUNCH_FILE}" \
   params_file:="${PARAMS_FILE}" \
   use_sim_time:="${USE_SIM_TIME}"

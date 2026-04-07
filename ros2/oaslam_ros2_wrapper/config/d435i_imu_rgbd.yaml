@@ -11,7 +11,7 @@ File.version: "1.0"
 # Intrinsics match slam_camera.yaml; format follows ORB-SLAM3 Camera1.* convention.
 #--------------------------------------------------------------------------------------------
 
-Camera1.type: "PinHole"
+Camera.type: "PinHole"
 
 # Intrinsic parameters (from factory calibration)
 Camera1.fx: 605.642333984375
@@ -22,6 +22,8 @@ Camera1.cy: 237.22653198242188
 # Distortion coefficients (D435i has negligible distortion after rectification)
 Camera1.k1: 0.0
 Camera1.k2: 0.0
+Camera1.k3: 0.0
+Camera1.k4: 0.0
 Camera1.p1: 0.0
 Camera1.p2: 0.0
 
@@ -30,7 +32,7 @@ Camera.width: 640
 Camera.height: 480
 
 # Frames per second (D435i typical for RGBD mode)
-Camera.fps: 30
+Camera.fps: 60
 
 # Color order (0: BGR, 1: RGB)
 Camera.RGB: 1
@@ -46,7 +48,8 @@ RGBD.DepthMapFactor: 1000.0
 # Close/far threshold. Baseline times this value gives the threshold for
 # classifying points as close or far. Far points are only inserted from
 # stereo/RGBD, close points are inserted from monocular observations too.
-ThDepth: 40.0
+Stereo.ThDepth: 40.0
+Stereo.b: 0.05
 
 # Stereo baseline (in meters) times fx. Used internally by ORB-SLAM3 for
 # depth-to-disparity conversion. For D435i: ~0.05 m baseline * 969 ≈ 48.45
@@ -119,10 +122,10 @@ ORBextractor.minThFAST: 7
 Viewer.KeyFrameSize: 0.02
 Viewer.KeyFrameLineWidth: 0.8
 Viewer.GraphLineWidth: 0.6
-Viewer.PointSize: 2
+Viewer.PointSize: 2.0
 Viewer.CameraSize: 0.04
-Viewer.CameraLineWidth: 2
-Viewer.ViewpointX: 0
+Viewer.CameraLineWidth: 2.0
+Viewer.ViewpointX: 0.0
 Viewer.ViewpointY: -0.7
 Viewer.ViewpointZ: -1.8
-Viewer.ViewpointF: 500
+Viewer.ViewpointF: 500.0

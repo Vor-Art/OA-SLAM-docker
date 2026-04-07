@@ -23,21 +23,6 @@ def generate_launch_description():
                 default_value="false",
                 description="Use ROS time from /clock (set true for rosbag playback).",
             ),
-            DeclareLaunchArgument(
-                "rgb_topic",
-                default_value="/camera/color/image_raw",
-                description="RGB image topic from D435i.",
-            ),
-            DeclareLaunchArgument(
-                "depth_topic",
-                default_value="/camera/aligned_depth_to_color/image_raw",
-                description="Aligned depth image topic from D435i.",
-            ),
-            DeclareLaunchArgument(
-                "imu_topic",
-                default_value="/camera/imu",
-                description="IMU topic from D435i.",
-            ),
             Node(
                 package="oaslam_ros2_wrapper",
                 executable="oaslam_vio_node",
@@ -46,11 +31,6 @@ def generate_launch_description():
                 parameters=[
                     LaunchConfiguration("params_file"),
                     {"use_sim_time": LaunchConfiguration("use_sim_time")},
-                ],
-                remappings=[
-                    ("rgb_topic", LaunchConfiguration("rgb_topic")),
-                    ("depth_topic", LaunchConfiguration("depth_topic")),
-                    ("imu_topic", LaunchConfiguration("imu_topic")),
                 ],
             ),
         ]

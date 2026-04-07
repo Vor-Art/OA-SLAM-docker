@@ -1,10 +1,11 @@
 oaslam_vio_node:
   ros__parameters:
     # SLAM Backend
-    vocabulary_file: "/app/Vocabulary/ORBvoc.txt"
-    camera_settings_file: "/app/config/d435i_imu_rgbd.yaml"
-    use_viewer: false
+    vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
+    camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/d435i_imu_rgbd.yaml"
+    use_viewer: true
     use_imu: true
+    use_sim_time: true
 
     # Observation Source
     observation_mode: "none"  # "onnx" for real-time detection, "file" for precomputed, "none" to disable
@@ -13,9 +14,12 @@ oaslam_vio_node:
     ignored_categories_file: ""
 
     # Relocalization
-    relocalization_mode: "points"  # "points", "objects", "points_and_objects"
+    relocalization_mode: "points_and_objects"  # "points", "objects", "points_and_objects"
 
     # Topics
-    rgb_topic: "/camera/color/image_raw"
-    depth_topic: "/camera/aligned_depth_to_color/image_raw"
-    imu_topic: "/camera/imu"
+    rgb_topic: "/upper/realsense_upper/color/image_raw"
+    depth_topic: "/upper/realsense_upper/aligned_depth_to_color/image_raw"
+    imu_topic: "/upper/realsense_upper/imu"
+
+    pose_topic: /oa_slam/camera_pose
+    world_frame_id: map

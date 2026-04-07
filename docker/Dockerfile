@@ -213,6 +213,11 @@ RUN cd /opt/OA-SLAM && \
     ldconfig
 
 # ROS2 wrapper (depends on OA-SLAM build above)
+# hotfix
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-rviz2 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY ros2 /opt/OA-SLAM/ros2
 RUN mkdir -p ${ROS_WS}/src && \
     git clone --depth 1 --branch ${ROS_DISTRO} https://github.com/ros-perception/vision_opencv.git ${ROS_WS}/src/vision_opencv && \
