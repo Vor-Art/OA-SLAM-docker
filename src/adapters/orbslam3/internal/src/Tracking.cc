@@ -1727,6 +1727,11 @@ void Tracking::PreintegrateIMU()
     if(!mCurrentFrame.mpPrevFrame)
     {
         Verbose::PrintMess("non prev frame ", Verbose::VERBOSITY_NORMAL);
+        // Create a valid (identity) preintegration so downstream code never
+        // dereferences a null mpImuPreintegratedFrame.
+        mCurrentFrame.mpImuPreintegratedFrame = new IMU::Preintegrated(mLastFrame.mImuBias, mCurrentFrame.mImuCalib);
+        mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
+        mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
         mCurrentFrame.setIntegrated();
         return;
     }
@@ -1736,6 +1741,11 @@ void Tracking::PreintegrateIMU()
     if(mlQueueImuData.size() == 0)
     {
         Verbose::PrintMess("Not IMU data in mlQueueImuData!!", Verbose::VERBOSITY_NORMAL);
+        // Create a valid (identity) preintegration so downstream code never
+        // dereferences a null mpImuPreintegratedFrame.
+        mCurrentFrame.mpImuPreintegratedFrame = new IMU::Preintegrated(mLastFrame.mImuBias, mCurrentFrame.mImuCalib);
+        mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
+        mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
         mCurrentFrame.setIntegrated();
         return;
     }
@@ -1777,6 +1787,12 @@ void Tracking::PreintegrateIMU()
     const int n = mvImuFromLastFrame.size()-1;
     if(n==0){
         cout << "Empty IMU measurements vector!!!\n";
+        // Create a valid (identity) preintegration so downstream code never
+        // dereferences a null mpImuPreintegratedFrame.
+        mCurrentFrame.mpImuPreintegratedFrame = new IMU::Preintegrated(mLastFrame.mImuBias, mCurrentFrame.mImuCalib);
+        mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
+        mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
+        mCurrentFrame.setIntegrated();
         return;
     }
 
@@ -1838,7 +1854,10 @@ void Tracking::PreintegrateIMU()
             continue;
 
         if (!mpImuPreintegratedFromLastKF)
-            cout << "mpImuPreintegratedFromLastKF does not exist" << endl;
+        {
+            cout << "mpImuPreintegratedFromLastKF does not exist — skipping integration step" << endl;
+            continue;
+        }
         mpImuPreintegratedFromLastKF->IntegrateNewMeasurement(acc,angVel,tstep);
         pImuPreintegratedFromLastFrame->IntegrateNewMeasurement(acc,angVel,tstep);
     }
@@ -1863,6 +1882,11 @@ bool Tracking::PredictStateIMU()
 
     if(mbMapUpdated && mpLastKeyFrame)
     {
+        if(!mpImuPreintegratedFromLastKF)
+        {
+            Verbose::PrintMess("PredictStateIMU: mpImuPreintegratedFromLastKF is null", Verbose::VERBOSITY_NORMAL);
+            return false;
+        }
         const Eigen::Vector3f twb1 = mpLastKeyFrame->GetImuPosition();
         const Eigen::Matrix3f Rwb1 = mpLastKeyFrame->GetImuRotation();
         const Eigen::Vector3f Vwb1 = mpLastKeyFrame->GetVelocity();
@@ -1881,6 +1905,11 @@ bool Tracking::PredictStateIMU()
     }
     else if(!mbMapUpdated)
     {
+        if(!mCurrentFrame.mpImuPreintegratedFrame)
+        {
+            Verbose::PrintMess("PredictStateIMU: mpImuPreintegratedFrame is null", Verbose::VERBOSITY_NORMAL);
+            return false;
+        }
         const Eigen::Vector3f twb1 = mLastFrame.GetImuPosition();
         const Eigen::Matrix3f Rwb1 = mLastFrame.GetImuRotation();
         const Eigen::Vector3f Vwb1 = mLastFrame.GetVelocity();
@@ -2306,7 +2335,8 @@ void Tracking::Track()
             pF->mpPrevFrame = new Frame(mLastFrame);
 
             // Load preintegration
-            pF->mpImuPreintegratedFrame = new IMU::Preintegrated(mCurrentFrame.mpImuPreintegratedFrame);
+            if(mCurrentFrame.mpImuPreintegratedFrame)
+                pF->mpImuPreintegratedFrame = new IMU::Preintegrated(mCurrentFrame.mpImuPreintegratedFrame);
         }
 
         if(pCurrentMap->isImuInitialized())
@@ -2728,7 +2758,8 @@ void Tracking::StereoInitialization()
                 return;
             }
 
-            if (!mFastInit && (mCurrentFrame.mpImuPreintegratedFrame->avgA-mLastFrame.mpImuPreintegratedFrame->avgA).norm()<0.5)
+            if (!mFastInit && mCurrentFrame.mpImuPreintegratedFrame && mLastFrame.mpImuPreintegratedFrame
+                && (mCurrentFrame.mpImuPreintegratedFrame->avgA-mLastFrame.mpImuPreintegratedFrame->avgA).norm()<0.5)
             {
                 cout << "not enough acceleration" << endl;
                 return;
@@ -4535,11 +4566,19 @@ void Tracking::UpdateFrameIMU(const float s, const IMU::Bias &b, KeyFrame* pCurr
         const Eigen::Vector3f twb1 = mLastFrame.mpLastKeyFrame->GetImuPosition();
         const Eigen::Matrix3f Rwb1 = mLastFrame.mpLastKeyFrame->GetImuRotation();
         const Eigen::Vector3f Vwb1 = mLastFrame.mpLastKeyFrame->GetVelocity();
-        float t12 = mLastFrame.mpImuPreintegrated->dT;
+        if(!mLastFrame.mpImuPreintegrated)
+        {
+            // Cannot predict without preintegration — use keyframe pose directly
+            mLastFrame.SetImuPoseVelocity(Rwb1, twb1, Vwb1);
+        }
+        else
+        {
+            float t12 = mLastFrame.mpImuPreintegrated->dT;
 
-        mLastFrame.SetImuPoseVelocity(IMU::NormalizeRotation(Rwb1*mLastFrame.mpImuPreintegrated->GetUpdatedDeltaRotation()),
-                                      twb1 + Vwb1*t12 + 0.5f*t12*t12*Gz+ Rwb1*mLastFrame.mpImuPreintegrated->GetUpdatedDeltaPosition(),
-                                      Vwb1 + Gz*t12 + Rwb1*mLastFrame.mpImuPreintegrated->GetUpdatedDeltaVelocity());
+            mLastFrame.SetImuPoseVelocity(IMU::NormalizeRotation(Rwb1*mLastFrame.mpImuPreintegrated->GetUpdatedDeltaRotation()),
+                                          twb1 + Vwb1*t12 + 0.5f*t12*t12*Gz+ Rwb1*mLastFrame.mpImuPreintegrated->GetUpdatedDeltaPosition(),
+                                          Vwb1 + Gz*t12 + Rwb1*mLastFrame.mpImuPreintegrated->GetUpdatedDeltaVelocity());
+        }
     }
 
     if (mCurrentFrame.mpImuPreintegrated)

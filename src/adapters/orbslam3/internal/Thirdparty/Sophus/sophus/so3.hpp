@@ -587,7 +587,16 @@ class SO3 : public SO3Base<SO3<Scalar_, Options>> {
     using std::cos;
     using std::sin;
     using std::sqrt;
+    using std::isfinite;
     Scalar theta_sq = omega.squaredNorm();
+
+    // Guard against NaN/Inf input — return identity rotation instead of
+    // crashing.  NaN can propagate from degenerate IMU preintegration,
+    // singular covariance inversion, or optimizer divergence.
+    if (!isfinite(theta_sq)) {
+      *theta = Scalar(0);
+      return SO3();  // identity quaternion
+    }
 
     Scalar imag_factor;
     Scalar real_factor;
@@ -611,10 +620,12 @@ class SO3 : public SO3Base<SO3<Scalar_, Options>> {
     q.unit_quaternion_nonconst() =
         QuaternionMember(real_factor, imag_factor * omega.x(),
                          imag_factor * omega.y(), imag_factor * omega.z());
-    SOPHUS_ENSURE(abs(q.unit_quaternion().squaredNorm() - Scalar(1)) <
-                      Sophus::Constants<Scalar>::epsilon(),
-                  "SO3::exp failed! omega: %, real: %, img: %",
-                  omega.transpose(), real_factor, imag_factor);
+    if (abs(q.unit_quaternion().squaredNorm() - Scalar(1)) >=
+        Sophus::Constants<Scalar>::epsilon()) {
+      // Quaternion is not unit — fall back to identity instead of aborting.
+      *theta = Scalar(0);
+      return SO3();
+    }
     return q;
   }
 

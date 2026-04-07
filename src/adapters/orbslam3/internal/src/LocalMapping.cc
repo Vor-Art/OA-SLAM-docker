@@ -1247,8 +1247,15 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
         const float nv = v.norm();
         const float cosg = gI.dot(dirG);
         const float ang = acos(cosg);
-        Eigen::Vector3f vzg = v*ang/nv;
-        Rwg = Sophus::SO3f::exp(vzg).matrix();
+        if(nv < 1e-10f || !std::isfinite(ang))
+        {
+            Rwg = Eigen::Matrix3f::Identity();
+        }
+        else
+        {
+            Eigen::Vector3f vzg = v*ang/nv;
+            Rwg = Sophus::SO3f::exp(vzg).matrix();
+        }
         mRwg = Rwg.cast<double>();
         mTinit = mpCurrentKeyFrame->mTimeStamp-mFirstTs;
     }

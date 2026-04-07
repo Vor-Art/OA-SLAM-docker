@@ -87,6 +87,14 @@ IntegratedRotation::IntegratedRotation(const Eigen::Vector3f &angVel, const Bias
     const float y = (angVel(1)-imuBias.bwy)*time;
     const float z = (angVel(2)-imuBias.bwz)*time;
 
+    // Guard against NaN/Inf — return identity rotation if inputs are bad
+    if(!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+    {
+        deltaR = Eigen::Matrix3f::Identity();
+        rightJ = Eigen::Matrix3f::Identity();
+        return;
+    }
+
     const float d2 = x*x+y*y+z*z;
     const float d = sqrt(d2);
 
@@ -296,7 +304,13 @@ Eigen::Matrix3f Preintegrated::GetDeltaRotation(const Bias &b_)
     std::unique_lock<std::mutex> lock(mMutex);
     Eigen::Vector3f dbg;
     dbg << b_.bwx-b.bwx,b_.bwy-b.bwy,b_.bwz-b.bwz;
-    return NormalizeRotation(dR * Sophus::SO3f::exp(JRg * dbg).matrix());
+    Eigen::Vector3f omega = JRg * dbg;
+    if(!omega.allFinite())
+    {
+        std::cerr << "IMU::GetDeltaRotation: NaN in JRg*dbg, returning dR as-is" << std::endl;
+        return NormalizeRotation(dR);
+    }
+    return NormalizeRotation(dR * Sophus::SO3f::exp(omega).matrix());
 }
 
 Eigen::Vector3f Preintegrated::GetDeltaVelocity(const Bias &b_)
@@ -320,7 +334,13 @@ Eigen::Vector3f Preintegrated::GetDeltaPosition(const Bias &b_)
 Eigen::Matrix3f Preintegrated::GetUpdatedDeltaRotation()
 {
     std::unique_lock<std::mutex> lock(mMutex);
-    return NormalizeRotation(dR * Sophus::SO3f::exp(JRg*db.head(3)).matrix());
+    Eigen::Vector3f omega = JRg * db.head(3);
+    if(!omega.allFinite())
+    {
+        std::cerr << "IMU::GetUpdatedDeltaRotation: NaN in JRg*db, returning dR as-is" << std::endl;
+        return NormalizeRotation(dR);
+    }
+    return NormalizeRotation(dR * Sophus::SO3f::exp(omega).matrix());
 }
 
 Eigen::Vector3f Preintegrated::GetUpdatedDeltaVelocity()

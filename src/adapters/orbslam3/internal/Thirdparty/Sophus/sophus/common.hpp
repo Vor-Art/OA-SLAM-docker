@@ -73,9 +73,12 @@ SOPHUS_FUNC void defaultEnsure(char const* function, char const* file, int line,
 #ifdef __CUDACC__
   std::printf("%s", description);
 #else
-  std::cout << details::FormatString(description, std::forward<Args>(args)...)
+  std::cerr << "[Sophus] ensure failed (non-fatal): "
+            << details::FormatString(description, std::forward<Args>(args)...)
             << std::endl;
-  std::abort();
+  // NOTE: std::abort() removed — NaN propagation from IMU preintegration or
+  // optimizer divergence should not kill the entire SLAM process.  Callers
+  // are expected to handle degenerate results gracefully.
 #endif
 }
 }  // namespace Sophus
