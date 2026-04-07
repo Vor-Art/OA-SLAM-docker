@@ -3,16 +3,18 @@
 Reads a ROS2 bag (sqlite3) directly and processes frames sequentially
 through the OA-SLAM pipeline.  No pub/sub — behaves like a standalone binary.
 
+All parameters (bag_path, output_folder, topics, SLAM settings, etc.) are
+read from the YAML params file.  Only the params file path and use_sim_time
+are accepted as launch arguments.
+
 Usage:
   ros2 launch oaslam_ros2_wrapper oaslam_offline_vio.launch.py \
-      bag_path:=/path/to/rosbag \
-      output_folder:=/path/to/output
+      params_file:=/path/to/offline_vio.yaml
 
-  # With custom config:
-  ros2 launch oaslam_ros2_wrapper oaslam_offline_vio.launch.py \
-      bag_path:=/path/to/rosbag \
-      output_folder:=/path/to/output \
-      params_file:=/path/to/custom_config.yaml
+  # Via docker compose (set OASLAM_ROS2_LAUNCH_FILE and OASLAM_ROS2_PARAMS_FILE):
+  OASLAM_ROS2_LAUNCH_FILE=oaslam_offline_vio.launch.py \
+  OASLAM_ROS2_PARAMS_FILE=/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/offline_vio.yaml \
+    docker compose --profile ros2 up oa-slam-ros2
 """
 
 from pathlib import Path
@@ -36,14 +38,9 @@ def generate_launch_description():
                 description="Path to the offline VIO parameter file.",
             ),
             DeclareLaunchArgument(
-                "bag_path",
-                default_value="",
-                description="Path to the rosbag directory (sqlite3 format). REQUIRED.",
-            ),
-            DeclareLaunchArgument(
-                "output_folder",
-                default_value="",
-                description="Directory to save CameraTrajectory.txt in TUM format. Empty to disable.",
+                "use_sim_time",
+                default_value="false",
+                description="Use simulated time (accepted for compatibility).",
             ),
             Node(
                 package="oaslam_ros2_wrapper",
@@ -52,10 +49,6 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     LaunchConfiguration("params_file"),
-                    {
-                        "bag_path": LaunchConfiguration("bag_path"),
-                        "output_folder": LaunchConfiguration("output_folder"),
-                    },
                 ],
             ),
         ]
