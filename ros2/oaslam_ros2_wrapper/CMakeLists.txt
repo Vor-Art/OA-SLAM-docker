@@ -42,9 +42,8 @@ add_executable(oaslam_vio_node
 )
 
 target_link_libraries(oaslam_vio_node
-  PRIVATE
-    Eigen3::Eigen
-    oaslam::oaslam_sdk
+  Eigen3::Eigen
+  oaslam::oaslam_sdk
 )
 
 ament_target_dependencies(oaslam_vio_node

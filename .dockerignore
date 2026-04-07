@@ -1,8 +1,17 @@
 .git
 .gitignore
 .codex
+.codeassistantignore
 build
 bin
 lib
 Data
 **/__pycache__
+*.md
+plans/
+docker/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

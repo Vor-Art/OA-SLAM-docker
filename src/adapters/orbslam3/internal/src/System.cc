@@ -513,7 +513,7 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp,
         for(size_t i_imu = 0; i_imu < vImuMeas.size(); i_imu++)
             mpTracker->GrabImuData(vImuMeas[i_imu]);
 
-    Sophus::SE3f Tcw = mpTracker->GrabImageMonocular(imToFeed, timestamp, detections, force_relocalize, filename);
+    Sophus::SE3f Tcw = mpTracker->GrabImageMonocular(imToFeed, timestamp, filename, detections, force_relocalize);
 
     unique_lock<mutex> lock2(mMutexState);
     mTrackingState = mpTracker->mState;

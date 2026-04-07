@@ -38,6 +38,7 @@
 #include "Settings.h"
 #include "Utils.h"
 #include "ObjectTrack.h"
+#include "ImageDetections.h"
 
 #include "GeometricCamera.h"
 

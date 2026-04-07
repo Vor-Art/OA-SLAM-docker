@@ -30,7 +30,7 @@
 
 #include "Thirdparty/g2o/g2o/core/base_vertex.h"
 #include "Thirdparty/g2o/g2o/core/base_unary_edge.h"
-#include "Thirdparty/g2o/g2o/core/base_binary_edge.hpp"
+#include "Thirdparty/g2o/g2o/core/base_binary_edge.h"
 #include "Thirdparty/g2o/g2o/core/sparse_optimizer.h"
 #include "Thirdparty/g2o/g2o/core/block_solver.h"
 #include "Thirdparty/g2o/g2o/core/solver.h"

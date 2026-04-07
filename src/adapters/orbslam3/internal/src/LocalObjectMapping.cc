@@ -142,8 +142,8 @@ void LocalObjectMapping::OptimizeReconstruction(MapObject *obj)
         return;
     auto [bboxes, Rts, scores] = obj->GetTrack()->CopyDetectionsInKeyFrames();
     const Ellipsoid& ellipsoid = obj->GetEllipsoid();
-    // ORB-SLAM3: mK_ is Eigen::Matrix3f, cast to double for ellipsoid operations
-    const Eigen::Matrix3d K = tracker_->mK_.cast<double>();
+    // ORB-SLAM3: ellipsoid operations
+    const Eigen::Matrix3d K = tracker_->GetK();
 
     typedef g2o::BlockSolver<g2o::BlockSolverTraits<9, 1>> BlockSolver;
     BlockSolver::LinearSolverType *linear_solver = new g2o::LinearSolverDense<BlockSolver::PoseMatrixType>();

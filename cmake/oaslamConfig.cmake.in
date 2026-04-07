@@ -1,12 +1,46 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-
 find_dependency(OpenCV REQUIRED)
 find_dependency(Eigen3 REQUIRED)
 find_dependency(Pangolin REQUIRED)
 find_dependency(dlib REQUIRED)
+find_dependency(OpenSSL REQUIRED)
+find_dependency(Boost REQUIRED COMPONENTS serialization)
 
-include("${CMAKE_CURRENT_LIST_DIR}/oaslamTargets.cmake")
+# Create an IMPORTED INTERFACE target that downstream can link against.
+if(NOT TARGET oaslam::oaslam_sdk)
+  add_library(oaslam::oaslam_sdk INTERFACE IMPORTED)
 
-check_required_components(oaslam)
+  # Collect every static/shared library we installed
+  file(GLOB _oaslam_libs "${CMAKE_CURRENT_LIST_DIR}/../../lib*.a")
+  file(GLOB _oaslam_shared "${CMAKE_CURRENT_LIST_DIR}/../../lib*.so")
+  list(APPEND _oaslam_all_libs ${_oaslam_libs} ${_oaslam_shared})
+
+  get_filename_component(_oaslam_prefix "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+
+  # Static archives may have circular dependencies; wrap them in a link group
+  # so the linker rescans as needed.
+  set(_oaslam_link_deps
+    -Wl,--start-group
+    ${_oaslam_all_libs}
+    -Wl,--end-group
+    Eigen3::Eigen
+    ${OpenCV_LIBS}
+    ${Pangolin_LIBRARIES}
+    dlib::dlib
+    OpenSSL::Crypto
+    Boost::serialization
+    stdc++fs
+  )
+
+  set_target_properties(oaslam::oaslam_sdk PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${_oaslam_prefix}/include"
+    INTERFACE_LINK_LIBRARIES "${_oaslam_link_deps}"
+  )
+  unset(_oaslam_libs)
+  unset(_oaslam_shared)
+  unset(_oaslam_all_libs)
+  unset(_oaslam_link_deps)
+  unset(_oaslam_prefix)
+endif()

@@ -38,6 +38,24 @@
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/map.hpp>
 
+namespace boost {
+namespace serialization {
+
+template<class Archive>
+void serialize(Archive &ar, DBoW2::BowVector &v, const unsigned int version)
+{
+    ar & boost::serialization::base_object<std::map<DBoW2::WordId, DBoW2::WordValue>>(v);
+}
+
+template<class Archive>
+void serialize(Archive &ar, DBoW2::FeatureVector &v, const unsigned int version)
+{
+    ar & boost::serialization::base_object<std::map<DBoW2::NodeId, std::vector<unsigned int>>>(v);
+}
+
+} // namespace serialization
+} // namespace boost
+
 
 namespace ORB_SLAM3
 {

@@ -172,6 +172,11 @@ COPY Vocabulary /opt/OA-SLAM/Vocabulary
 RUN cd /opt/OA-SLAM/Vocabulary && tar -xf ORBvoc.txt.tar.gz
 
 # -------------------------------
+# hotfix
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libboost-serialization-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy CMakeLists and other build configuration files
 COPY CMakeLists.txt /opt/OA-SLAM/
 COPY cmake /opt/OA-SLAM/cmake
@@ -180,21 +185,35 @@ COPY cmake /opt/OA-SLAM/cmake
 COPY include /opt/OA-SLAM/include
 COPY src /opt/OA-SLAM/src
 COPY examples /opt/OA-SLAM/examples
-COPY ros2 /opt/OA-SLAM/ros2
 RUN mkdir -p /opt/OA-SLAM/Data
 
 # Build OA-SLAM main project
+# NOTE: We use "Unix Makefiles" instead of Ninja to avoid the
+# "manifest 'build.ninja' still dirty after 100 tries" error that
+# occurs when CMake re-generates build files (e.g. from
+# configure_package_config_file) during the Ninja build step.
 RUN cd /opt/OA-SLAM && \
     cmake -S . -B build \
-      -G Ninja \
-      -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+      -G "Unix Makefiles" \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCUDAToolkit_ROOT=/usr/local/cuda && \
-    cmake --build build --parallel ${NPROC} && \
+      -DCUDAToolkit_ROOT=/usr/local/cuda
+
+RUN cd /opt/OA-SLAM && \
+    cmake --build build --parallel ${NPROC} --target oaslam_legacy_internal
+
+RUN cd /opt/OA-SLAM && \
+    cmake --build build --parallel ${NPROC} --target orbslam3_g2o orbslam3_DBoW2
+
+RUN cd /opt/OA-SLAM && \
+    cmake --build build --parallel ${NPROC} --target oaslam_orbslam3_internal
+
+RUN cd /opt/OA-SLAM && \
+    cmake --build build --parallel ${NPROC} -- --output-sync=target && \
     cmake --install build && \
     ldconfig
 
 # ROS2 wrapper (depends on OA-SLAM build above)
+COPY ros2 /opt/OA-SLAM/ros2
 RUN mkdir -p ${ROS_WS}/src && \
     git clone --depth 1 --branch ${ROS_DISTRO} https://github.com/ros-perception/vision_opencv.git ${ROS_WS}/src/vision_opencv && \
     cp -r /opt/OA-SLAM/ros2/oaslam_ros2_wrapper ${ROS_WS}/src/oaslam_ros2_wrapper

@@ -219,8 +219,9 @@ void ObjectTrack::AddDetection(const BBox2& bbox, double score, const Matrix34d&
         keyframes_scores_[kf] = score;
 
         std::unique_lock<std::mutex> lock(mutex_associated_map_points_);
+        std::vector<MapPoint*> mapPoints = kf->GetMapPointMatches();
         for (size_t i = 0; i < kf->mvKeys.size(); ++i) {
-            MapPoint* p = kf->mvpMapPoints[i];
+            MapPoint* p = mapPoints[i];
             if (p) {
                 auto kp = kf->mvKeys[i];
                 if (is_inside_bbox(kp.pt.x , kp.pt.y, bbox)) {
@@ -255,7 +256,7 @@ ObjectTrack::CopyDetectionsInKeyFrames()
         int i = 0;
         std::vector<KeyFrame*> to_erase;
         for (auto& it : keyframes_bboxes_) {
-            if (it.first->isToBeErased() || it.first->isBad()) {
+            if (it.first->isBad()) {
                 to_erase.push_back(it.first);
                 continue;
             }
@@ -417,7 +418,7 @@ void ObjectTrack::CleanBadKeyFrames()
 {
     vector<KeyFrame*> to_remove;
     for (auto it : keyframes_bboxes_) {
-        if (it.first->isBad() || it.first->isToBeErased()) {
+        if (it.first->isBad()) {
             to_remove.push_back(it.first);
         }
     }
