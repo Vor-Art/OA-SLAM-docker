@@ -681,11 +681,24 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         // Collect all IMU measurements between the previous frame and the
         // current frame.  These are passed as a vector to the SLAM system
         // which performs IMU pre-integration internally.
+        //
+        // IMPORTANT: We must keep the last (boundary) IMU measurement in the
+        // buffer so the next frame can use it as the starting point for its
+        // preintegration window.  ORB-SLAM3's PreintegrateIMU() expects at
+        // least one IMU sample with timestamp >= prevFrame.mTimeStamp in the
+        // queue.  Draining it away causes "Empty IMU measurements vector!!!"
+        // warnings and cascading IMU initialization failures.
         std::vector<oaslam::ImuMeasurement> imu_for_frame;
-        while (!imu_buffer.empty() &&
-               imu_buffer.front().timestamp <= image_timestamp) {
+        while (imu_buffer.size() > 1 &&
+               imu_buffer.front().timestamp < image_timestamp) {
           imu_for_frame.push_back(imu_buffer.front());
           imu_buffer.pop_front();
+        }
+        // Include the boundary measurement (at or just past image timestamp)
+        // but keep it in the buffer for the next frame's preintegration.
+        if (!imu_buffer.empty()) {
+          imu_for_frame.push_back(imu_buffer.front());
+          // Do NOT pop_front — next frame needs this as its starting point
         }
 
         // ── 9. Build FramePacket ──

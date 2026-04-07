@@ -80,6 +80,12 @@ IMU.Frequency: 200.0
 # Insert keyframes when tracking is lost to aid IMU-based recovery
 IMU.InsertKFsWhenLost: 1
 
+# Enable fast IMU initialization (skip strict acceleration-change check).
+# Recommended for RGBD mode where scale is already observable from depth,
+# and for robots with smooth motion profiles that may not produce large
+# acceleration changes between consecutive frames.
+IMU.fastInit: 1
+
 #--------------------------------------------------------------------------------------------
 # IMU-Camera Extrinsic: Transformation from IMU body frame to Camera1 (RGB)
 #
