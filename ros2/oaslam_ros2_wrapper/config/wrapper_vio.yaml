@@ -17,7 +17,7 @@ oaslam_vio_node:
     relocalization_mode: "points_and_objects"  # "points", "objects", "points_and_objects"
 
     # Output — set to a directory path to save CameraTrajectory.txt in TUM format
-    output_folder: ""
+    output_folder: "/opt/OA-SLAM/Data/run/"
 
     # Topics
     rgb_topic: "/upper/realsense_upper/color/image_raw"

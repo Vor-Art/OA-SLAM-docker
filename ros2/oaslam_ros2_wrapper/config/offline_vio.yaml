@@ -1,7 +1,7 @@
 oaslam_offline_vio_node:
   ros__parameters:
     # ── Rosbag input ──
-    bag_path: ""  # REQUIRED: path to the rosbag directory (sqlite3 format)
+    bag_path: "/opt/OA-SLAM/Data/realsense_recording/dynamic_robot_1_uncompressed"  # REQUIRED: path to the rosbag directory (sqlite3 format)
 
     # ── Topics inside the bag ──
     rgb_topic: "/upper/realsense_upper/color/image_raw"
@@ -18,14 +18,14 @@ oaslam_offline_vio_node:
     # sensor_msgs/msg/Image topics.
     #
     # For the dynamic_robot_1_uncompressed bag where depth landed on "/":
-    depth_topic_override: "/"
+    depth_topic_override: ""
 
     # ── Temporal synchronization ──
     # Maximum allowable time difference (seconds) between an RGB frame and
     # its nearest depth frame for them to be considered a matched pair.
     # Default 33ms matches 30fps cameras.  Increase if RGB and depth have
     # different frame rates or significant timestamp jitter.
-    max_depth_dt_sec: 0.033
+    max_depth_dt_sec: 0.1
 
     # ── SLAM Backend ──
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
@@ -43,7 +43,7 @@ oaslam_offline_vio_node:
     relocalization_mode: "points_and_objects"  # "points", "objects", "points_and_objects"
 
     # ── Output ──
-    output_folder: ""  # Set to a directory path to save CameraTrajectory.txt in TUM format
+    output_folder: "/opt/OA-SLAM/Data/run/"  # Set to a directory path to save CameraTrajectory.txt in TUM format
 
     # ── Camera ID ──
     camera_id: "rgbd0"

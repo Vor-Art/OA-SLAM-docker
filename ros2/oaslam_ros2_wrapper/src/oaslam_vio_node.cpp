@@ -172,13 +172,15 @@ class OaSlamVioNode : public rclcpp::Node {
     // Open TUM trajectory file if output folder is specified
     if (!IsEmptyPath(output_folder)) {
       std::filesystem::create_directories(output_folder);
-      const std::string tum_path = output_folder + "/CameraTrajectory.txt";
+      const std::string tum_path = output_folder + "CameraTrajectory.txt";
       tum_trajectory_file_.open(tum_path, std::ios::out | std::ios::trunc);
       if (!tum_trajectory_file_.is_open()) {
         throw std::runtime_error("Failed to open TUM trajectory file: " + tum_path);
       }
       tum_trajectory_file_ << "# TUM trajectory format: timestamp tx ty tz qx qy qz qw\n";
       RCLCPP_INFO(get_logger(), "Saving camera trajectory (TUM format) to: %s", tum_path.c_str());
+    } else {
+      RCLCPP_WARN(get_logger(), "Output folder is empty");
     }
 
     const std::string vocabulary_file =
@@ -273,10 +275,11 @@ class OaSlamVioNode : public rclcpp::Node {
                 "  RGB topic:   %s\n"
                 "  Depth topic: %s\n"
                 "  IMU topic:   %s\n"
-                "  Pose topic:  %s",
+                "  Pose topic:  %s\n",
+                "  output_folder:  %s",
                 use_imu ? "enabled" : "disabled",
                 rgb_topic_.c_str(), depth_topic_.c_str(),
-                imu_topic_.c_str(), pose_topic_.c_str());
+                imu_topic_.c_str(), pose_topic_.c_str(), output_folder.c_str());
   }
 
   ~OaSlamVioNode() override {
@@ -375,9 +378,9 @@ class OaSlamVioNode : public rclcpp::Node {
         ToPoseStamped(rgb_msg->header, world_frame_id_, result.tracking.T_world_camera));
 
     // Write pose to TUM trajectory file
-    if (tum_trajectory_file_.is_open()) {
+    // if (tum_trajectory_file_.is_open()) {
       WriteTumPoseLine(tum_trajectory_file_, image_timestamp, result.tracking.T_world_camera);
-    }
+    // }
   }
 
   void WarnIfNoImagesReceived() {

@@ -205,10 +205,10 @@ RUN cd /opt/OA-SLAM && \
     cmake --build build --parallel ${NPROC} --target orbslam3_g2o orbslam3_DBoW2
 
 RUN cd /opt/OA-SLAM && \
-    cmake --build build --parallel ${NPROC} --target oaslam_orbslam3_internal
+    cmake --build build --parallel 8 --target oaslam_orbslam3_internal
 
 RUN cd /opt/OA-SLAM && \
-    cmake --build build --parallel ${NPROC} -- --output-sync=target && \
+    cmake --build build --parallel 8 -- --output-sync=target && \
     cmake --install build && \
     ldconfig
 

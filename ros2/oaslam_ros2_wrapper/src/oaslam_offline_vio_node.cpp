@@ -373,6 +373,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     rosbag2_cpp::Reader reader;
     rosbag2_storage::StorageOptions storage_opts;
     storage_opts.uri = bag_path_;
+    // storage_opts.storage_id = "sqlite3";
 
     rosbag2_cpp::ConverterOptions converter_opts;
     converter_opts.input_serialization_format = "cdr";
