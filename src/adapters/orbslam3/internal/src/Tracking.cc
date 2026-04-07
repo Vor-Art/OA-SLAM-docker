@@ -57,7 +57,7 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     mState(NO_IMAGES_YET), mSensor(sensor), mTrackedFr(0), mbStep(false),
     mbOnlyTracking(false), mbMapUpdated(false), mbVO(false), mpORBVocabulary(pVoc), mpKeyFrameDB(pKFDB),
     mbReadyToInitializate(false), mpSystem(pSys), mpViewer(NULL), bStepByStep(false),
-    mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpAtlas(pAtlas), mnLastRelocFrameId(0), time_recently_lost(5.0),
+    mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpAtlas(pAtlas), mnLastRelocFrameId(0), time_recently_lost(1.0),
     mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr), mpLastKeyFrame(static_cast<KeyFrame*>(NULL))
 {
     // Load camera parameters from settings file
@@ -1934,7 +1934,26 @@ bool Tracking::PredictStateIMU()
 
 void Tracking::ResetFrameIMU()
 {
-    // TODO To implement...
+    // Reset IMU preintegration after relocalization so that the IMU state
+    // is consistent with the new visual pose.  Without this, stale
+    // preintegration from before relocalization corrupts the trajectory.
+
+    // 1. Reset the KF-to-current preintegration accumulator
+    if(mpImuPreintegratedFromLastKF)
+        delete mpImuPreintegratedFromLastKF;
+    mpImuPreintegratedFromLastKF = new IMU::Preintegrated(mCurrentFrame.mImuBias, mCurrentFrame.mImuCalib);
+
+    // 2. Update the current frame's preintegration pointer
+    mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
+
+    // 3. Update bias bookkeeping
+    mLastBias = mCurrentFrame.mImuBias;
+
+    // 4. Anchor to the current keyframe
+    if(mpLastKeyFrame)
+    {
+        mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
+    }
 }
 
 
@@ -4459,6 +4478,24 @@ void Tracking::ResetActiveMap(bool bLocMap)
     mpReferenceKF = static_cast<KeyFrame*>(NULL);
     mpLastKeyFrame = static_cast<KeyFrame*>(NULL);
     mvIniMatches.clear();
+
+    // Clear stale IMU data from the old map so the new map starts fresh.
+    // Without this, PreintegrateIMU() on the first frames of the new map
+    // would consume IMU measurements that belong to the old coordinate frame,
+    // producing incorrect preintegration and contributing to trajectory jumps.
+    {
+        unique_lock<mutex> lock(mMutexImuQueue);
+        mlQueueImuData.clear();
+    }
+
+    // Reset the IMU preintegration accumulator (same as CreateMapInAtlas does).
+    // Without this, the new map inherits accumulated delta position/velocity/
+    // rotation from the old map's coordinate frame.
+    if((mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD) && mpImuPreintegratedFromLastKF)
+    {
+        delete mpImuPreintegratedFromLastKF;
+        mpImuPreintegratedFromLastKF = new IMU::Preintegrated(IMU::Bias(),*mpImuCalib);
+    }
 
     mbVelocity = false;
 
