@@ -380,11 +380,18 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
 
     reader.open(storage_opts, converter_opts);
 
-    // ── Collect topic type info ──
+    // ── Collect topic type info and log all topics found in the bag ──
     const auto topics_and_types = reader.get_all_topics_and_types();
     std::map<std::string, std::string> topic_type_map;
     for (const auto& info : topics_and_types) {
       topic_type_map[info.name] = info.type;
+    }
+
+    RCLCPP_INFO(get_logger(), "Bag contains %zu topics:", topics_and_types.size());
+    for (const auto& info : topics_and_types) {
+      RCLCPP_INFO(get_logger(), "  topic: '%s'  type: [%s]  serialization: %s",
+                  info.name.c_str(), info.type.c_str(),
+                  info.serialization_format.c_str());
     }
 
     // ── Resolve the effective depth topic ──
@@ -404,6 +411,18 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     }
 
     RCLCPP_INFO(get_logger(), "Effective depth topic: '%s'", effective_depth_topic.c_str());
+
+    // Log topic resolution summary
+    RCLCPP_INFO(get_logger(),
+                "Topic resolution summary:\n"
+                "  RGB topic:   '%s' -> %s\n"
+                "  Depth topic: '%s' (configured) -> '%s' (effective)\n"
+                "  IMU topic:   '%s' -> %s",
+                rgb_topic_.c_str(),
+                topic_type_map.count(rgb_topic_) ? "FOUND" : "NOT FOUND",
+                depth_topic_.c_str(), effective_depth_topic.c_str(),
+                imu_topic_.c_str(),
+                topic_type_map.count(imu_topic_) ? "FOUND" : "NOT FOUND");
 
     // Verify RGB and IMU topics exist
     if (topic_type_map.find(rgb_topic_) == topic_type_map.end()) {
@@ -432,6 +451,13 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     uint64_t total_imu_in_bag = 0;
     uint64_t total_depth_in_bag = 0;
     uint64_t imu_nan_filtered = 0;
+    uint64_t total_ignored_messages = 0;
+
+    // Track per-topic message counts for final summary
+    std::map<std::string, uint64_t> per_topic_msg_count;
+
+    // Track whether we've logged the first message for each topic
+    std::map<std::string, bool> first_msg_logged;
 
     // Last known good pose
     oaslam::Transform4d last_known_pose = oaslam::Transform4d::eye();
@@ -455,6 +481,20 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     while (reader.has_next() && !quit_requested) {
       auto bag_msg = reader.read_next();
       const std::string& topic = bag_msg->topic_name;
+
+      // Track per-topic message counts
+      per_topic_msg_count[topic]++;
+
+      // Log the first message seen on each topic (helps debug topic issues)
+      if (first_msg_logged.find(topic) == first_msg_logged.end()) {
+        first_msg_logged[topic] = true;
+        const double msg_ts = NanosToSeconds(bag_msg->time_stamp);
+        const std::string type_str = topic_type_map.count(topic)
+            ? topic_type_map.at(topic) : "(unknown type)";
+        RCLCPP_INFO(get_logger(),
+                    "First message on topic '%s' [%s] at t=%.6f s",
+                    topic.c_str(), type_str.c_str(), msg_ts);
+      }
 
       // ────────────────────────────────────────────────────────────────
       // IMU message
@@ -702,12 +742,28 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         continue;
       }
 
-      // Other topics are silently ignored.
+      // Other topics — count but don't process
+      total_ignored_messages++;
     }
 
     // ── Done ──
     auto wall_end = std::chrono::steady_clock::now();
     double total_sec = std::chrono::duration<double>(wall_end - wall_start).count();
+
+    // Log per-topic message counts
+    RCLCPP_INFO(get_logger(), "Per-topic message counts read from bag:");
+    for (const auto& [tname, tcount] : per_topic_msg_count) {
+      const std::string type_str = topic_type_map.count(tname)
+          ? topic_type_map.at(tname) : "(unknown)";
+      const char* role = "";
+      if (tname == rgb_topic_) role = " [RGB]";
+      else if (tname == effective_depth_topic) role = " [DEPTH]";
+      else if (tname == imu_topic_) role = " [IMU]";
+      else role = " [ignored]";
+      RCLCPP_INFO(get_logger(), "  '%s' [%s]: %lu messages%s",
+                  tname.c_str(), type_str.c_str(),
+                  static_cast<unsigned long>(tcount), role);
+    }
 
     RCLCPP_INFO(get_logger(),
                 "\n========================================\n"
@@ -715,6 +771,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 "  RGB images in bag: %lu\n"
                 "  Depth images in bag: %lu\n"
                 "  IMU samples in bag: %lu (NaN filtered: %lu)\n"
+                "  Ignored messages:  %lu\n"
                 "  Frames processed:  %lu\n"
                 "  Frames skipped (no depth): %lu\n"
                 "  Poses (tracked):   %lu\n"
@@ -728,6 +785,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 static_cast<unsigned long>(total_depth_in_bag),
                 static_cast<unsigned long>(total_imu_in_bag),
                 static_cast<unsigned long>(imu_nan_filtered),
+                static_cast<unsigned long>(total_ignored_messages),
                 static_cast<unsigned long>(total_frames_processed),
                 static_cast<unsigned long>(total_frames_skipped_no_depth),
                 static_cast<unsigned long>(total_poses_obtained),
