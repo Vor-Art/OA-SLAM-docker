@@ -175,66 +175,26 @@ RUN cd /opt/OA-SLAM/Vocabulary && tar -xf ORBvoc.txt.tar.gz
 # hotfix
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libboost-serialization-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy CMakeLists and other build configuration files
-COPY CMakeLists.txt /opt/OA-SLAM/
-COPY cmake /opt/OA-SLAM/cmake
-
-# Copy source code and headers (these change more frequently)
-COPY include /opt/OA-SLAM/include
-COPY src /opt/OA-SLAM/src
-COPY examples /opt/OA-SLAM/examples
-RUN mkdir -p /opt/OA-SLAM/Data
-
-# Build OA-SLAM main project
-# NOTE: We use "Unix Makefiles" instead of Ninja to avoid the
-# "manifest 'build.ninja' still dirty after 100 tries" error that
-# occurs when CMake re-generates build files (e.g. from
-# configure_package_config_file) during the Ninja build step.
-RUN cd /opt/OA-SLAM && \
-    cmake -S . -B build \
-      -G "Unix Makefiles" \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCUDAToolkit_ROOT=/usr/local/cuda
-
-RUN cd /opt/OA-SLAM && \
-    cmake --build build --parallel ${NPROC} --target oaslam_legacy_internal
-
-RUN cd /opt/OA-SLAM && \
-    cmake --build build --parallel ${NPROC} --target orbslam3_g2o orbslam3_DBoW2
-
-RUN cd /opt/OA-SLAM && \
-    cmake --build build --parallel 8 --target oaslam_orbslam3_internal
-
-RUN cd /opt/OA-SLAM && \
-    cmake --build build --parallel 8 -- --output-sync=target && \
-    cmake --install build && \
-    ldconfig
-
-# ROS2 wrapper (depends on OA-SLAM build above)
-# hotfix
-RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-rosbag2-cpp \
+    ros-${ROS_DISTRO}-rosbag2-storage \
     ros-${ROS_DISTRO}-rviz2 \
+    ros-${ROS_DISTRO}-std-msgs \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ros2 /opt/OA-SLAM/ros2
-RUN mkdir -p ${ROS_WS}/src && \
-    git clone --depth 1 --branch ${ROS_DISTRO} https://github.com/ros-perception/vision_opencv.git ${ROS_WS}/src/vision_opencv && \
-    cp -r /opt/OA-SLAM/ros2/oaslam_ros2_wrapper ${ROS_WS}/src/oaslam_ros2_wrapper
 
-RUN /bin/bash -lc "source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    cd ${ROS_WS} && \
-    export CMAKE_PREFIX_PATH=/usr/local:\${CMAKE_PREFIX_PATH} && \
-    colcon build --merge-install --packages-select cv_bridge oaslam_ros2_wrapper --cmake-args -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=/usr/local/lib/cmake/opencv4"
 
-ARG OASLAM_UID=1000
-ARG OASLAM_GID=1000
-ARG OASLAM_USER=oaslam
 
-RUN groupadd -g "${OASLAM_GID}" "${OASLAM_USER}" && \
-    useradd -m -s /bin/bash -u "${OASLAM_UID}" -g "${OASLAM_GID}" "${OASLAM_USER}" && \
-    install -d -o "${OASLAM_UID}" -g "${OASLAM_GID}" "/home/${OASLAM_USER}/.ros"
+ENV OASLAM_CPP_BUILD_DIR=/opt/OA-SLAM/build
+ENV OASLAM_CPP_INSTALL_PREFIX=/opt/oaslam_artifacts/cpp/install
+RUN mkdir -p /opt/OA-SLAM/Data ${OASLAM_CPP_BUILD_DIR} ${OASLAM_CPP_INSTALL_PREFIX} ${ROS_WS}/src ${ROS_WS}/build ${ROS_WS}/install ${ROS_WS}/log && \
+    git clone --depth 1 --branch ${ROS_DISTRO} https://github.com/ros-perception/vision_opencv.git ${ROS_WS}/src/vision_opencv
+RUN mkdir -p \
+      /root/.ros \
+      "${OASLAM_CPP_BUILD_DIR}" \
+      "${OASLAM_CPP_INSTALL_PREFIX}" \
+      "${ROS_WS}/build" \
+      "${ROS_WS}/install" \
+      "${ROS_WS}/log"
 
 WORKDIR /opt/OA-SLAM
 CMD ["/bin/bash"]

@@ -84,7 +84,7 @@ IMU.InsertKFsWhenLost: 1
 # Recommended for RGBD mode where scale is already observable from depth,
 # and for robots with smooth motion profiles that may not produce large
 # acceleration changes between consecutive frames.
-IMU.fastInit: 1
+IMU.fastInit: false
 
 #--------------------------------------------------------------------------------------------
 # IMU-Camera Extrinsic: Transformation from IMU body frame to Camera1 (RGB)

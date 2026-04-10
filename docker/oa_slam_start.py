@@ -13,6 +13,7 @@ import yaml
 
 PROJECT_ROOT = Path("/opt/OA-SLAM")
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "docker" / "run_config.yaml"
+DEFAULT_CPP_INSTALL_PREFIX = Path(os.environ.get("OASLAM_CPP_INSTALL_PREFIX", "/opt/oaslam_artifacts/cpp/install"))
 NONE_VALUES = {"", "none", "null", "None", "NULL", None}
 GENERIC_INPUT_DIRS = {"color", "rgb", "images", "image", "frames"}
 ALLOWED_RELOCALIZATION_MODES = {"points", "objects", "points+objects"}
@@ -74,6 +75,20 @@ def derive_run_name(image_source: str, run_name: str) -> str:
     return f"mapping_{suffix or 'run'}"
 
 
+def resolve_executable() -> Path:
+    candidates = [
+        DEFAULT_CPP_INSTALL_PREFIX / "bin" / "oa-slam",
+        PROJECT_ROOT / "build" / "bin" / "oa-slam",
+        PROJECT_ROOT / "bin" / "oa-slam",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        "OA-SLAM executable does not exist. Build it inside the container first with: ./docker/run.sh rebuild-cpp"
+    )
+
+
 def build_command(config: dict) -> tuple[list[str], Path]:
     vocabulary = validate_existing_path("Vocabulary", config.get("vocabulary"))
     camera_config = validate_existing_path("Camera config", config.get("camera_config"))
@@ -93,7 +108,7 @@ def build_command(config: dict) -> tuple[list[str], Path]:
     output_dir = output_root / f"{derive_run_name(image_source, run_name)}_{datetime.now():%Y%m%d_%H%M%S}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    executable = PROJECT_ROOT / "bin" / "oa-slam"
+    executable = resolve_executable()
     command = [
         str(executable),
         vocabulary,
@@ -104,9 +119,6 @@ def build_command(config: dict) -> tuple[list[str], Path]:
         relocalization_mode,
         str(output_dir),
     ]
-
-    if not executable.exists():
-        raise FileNotFoundError(f"Executable does not exist: {executable}")
 
     return command, output_dir
 

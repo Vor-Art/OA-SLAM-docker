@@ -1,4 +1,4 @@
-# OA-SLAM runtime config for docker/run_oa_slam.py
+# OA-SLAM runtime config for docker/oa_slam_start.py
 
 # Paths
 vocabulary: /opt/OA-SLAM/Vocabulary/ORBvoc.txt

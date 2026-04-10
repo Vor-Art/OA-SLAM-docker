@@ -275,8 +275,8 @@ class OaSlamVioNode : public rclcpp::Node {
                 "  RGB topic:   %s\n"
                 "  Depth topic: %s\n"
                 "  IMU topic:   %s\n"
-                "  Pose topic:  %s\n",
-                "  output_folder:  %s",
+                "  Pose topic:  %s\n"
+                "  output_folder: %s",
                 use_imu ? "enabled" : "disabled",
                 rgb_topic_.c_str(), depth_topic_.c_str(),
                 imu_topic_.c_str(), pose_topic_.c_str(), output_folder.c_str());

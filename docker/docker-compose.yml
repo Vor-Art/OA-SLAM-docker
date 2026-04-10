@@ -9,9 +9,7 @@ x-oaslam-build: &oaslam-build
     OPENCV_VERSION: ${OPENCV_VERSION}
     NPROC: ${NPROC}
     CUDA_ARCH_BIN: ${CUDA_ARCH_BIN}
-    OASLAM_UID: ${UID:-1000}
-    OASLAM_GID: ${GID:-1000}
-    # proxy disable (needed to run on this matchie)
+    ROS_DISTRO: ${ROS_DISTRO:-humble}
     HTTP_PROXY: ${DOCKER_BUILD_HTTP_PROXY:-}
     HTTPS_PROXY: ${DOCKER_BUILD_HTTPS_PROXY:-}
     ALL_PROXY: ${DOCKER_BUILD_ALL_PROXY:-}
@@ -31,52 +29,45 @@ services:
       QT_X11_NO_MITSHM: "1"
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
-      HOME: /home/oaslam
-      ROS_HOME: /home/oaslam/.ros
+      HOME: /root
+      ROS_HOME: /root/.ros
+      ROS_DISTRO: ${ROS_DISTRO:-humble}
+      ROS_WS: /opt/oaslam_ros2_ws
+      NPROC: ${NPROC:-16}
+      OASLAM_CPP_BUILD_DIR: /opt/OA-SLAM/build
+      OASLAM_CPP_INSTALL_PREFIX: /opt/oaslam_artifacts/cpp/install
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../CMakeLists.txt:/opt/OA-SLAM/CMakeLists.txt:ro
+      - ../cmake:/opt/OA-SLAM/cmake:ro
+      - ../include:/opt/OA-SLAM/include:ro
+      - ../src:/opt/OA-SLAM/src:ro
+      - ../examples:/opt/OA-SLAM/examples:ro
+      - ../ros2:/opt/OA-SLAM/ros2:ro
+      - ../ros2/oaslam_ros2_wrapper:/opt/oaslam_ros2_ws/src/oaslam_ros2_wrapper:ro
       - ../Data:/opt/OA-SLAM/Data
       - ../Cameras:/opt/OA-SLAM/Cameras:ro
-      - ../ros2:/opt/OA-SLAM/ros2:ro
       - ./:/opt/OA-SLAM/docker:ro
+      # voluems
+      - oaslam_cpp_build:/opt/OA-SLAM/build
+      - oaslam_cpp_install:/opt/oaslam_artifacts/cpp/install
+      - oaslam_ros2_build:/opt/oaslam_ros2_ws/build
+      - oaslam_ros2_install:/opt/oaslam_ros2_ws/install
+      - oaslam_ros2_log:/opt/oaslam_ros2_ws/log
+      - oaslam_ros_home:/root/.ros
     network_mode: host
     ipc: host
     stdin_open: true
     tty: true
     init: true
-    user: "${UID:-1000}:${GID:-1000}"
     gpus: all
     working_dir: /opt/OA-SLAM
-    entrypoint: ["python3", "/opt/OA-SLAM/docker/run_oa_slam.py"]
+    command: ["sleep", "infinity"]
 
-  oa-slam-ros2:
-    build: *oaslam-build
-    image: oa-slam:latest
-    container_name: oa-slam-ros2
-    profiles: ["ros2"]
-    environment:
-      DISPLAY: ${DISPLAY:-:0}
-      QT_X11_NO_MITSHM: "1"
-      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
-      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
-      HOME: /home/oaslam
-      ROS_HOME: /home/oaslam/.ros
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      USE_SIM_TIME: ${USE_SIM_TIME:-false}
-      OASLAM_ROS2_LAUNCH_FILE: ${OASLAM_ROS2_LAUNCH_FILE:-oaslam_wrapper.launch.py}
-      OASLAM_ROS2_PARAMS_FILE: ${OASLAM_ROS2_PARAMS_FILE:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper.yaml}
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ../Data:/opt/OA-SLAM/Data
-      - ../Cameras:/opt/OA-SLAM/Cameras:ro
-      - ../ros2:/opt/OA-SLAM/ros2:ro
-      - ./:/opt/OA-SLAM/docker:ro
-    network_mode: host
-    ipc: host
-    stdin_open: true
-    tty: true
-    init: true
-    user: "${UID:-1000}:${GID:-1000}"
-    gpus: all
-    working_dir: /opt/OA-SLAM
-    entrypoint: ["/bin/bash", "/opt/OA-SLAM/docker/run_ros2_wrapper.sh"]
+volumes:
+  oaslam_cpp_build:
+  oaslam_cpp_install:
+  oaslam_ros2_build:
+  oaslam_ros2_install:
+  oaslam_ros2_log:
+  oaslam_ros_home:

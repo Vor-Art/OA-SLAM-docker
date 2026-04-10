@@ -1,7 +1,8 @@
 oaslam_offline_vio_node:
   ros__parameters:
     # ── Rosbag input ──
-    bag_path: "/opt/OA-SLAM/Data/realsense_recording/dynamic_robot_1_uncompressed"  # REQUIRED: path to the rosbag directory (sqlite3 format)
+    # bag_path: "/opt/OA-SLAM/Data/realsense_recording/dynamic_robot_1_uncompressed"  # REQUIRED: path to the rosbag directory (sqlite3 format)
+    bag_path: "/opt/OA-SLAM/Data/realsense_recording/work_environment"  # REQUIRED: path to the rosbag directory (sqlite3 format)
 
     # ── Topics inside the bag ──
     rgb_topic: "/upper/realsense_upper/color/image_raw"
@@ -31,7 +32,7 @@ oaslam_offline_vio_node:
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
     camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/d435i_imu_rgbd.yaml"
     use_viewer: true
-    use_imu: true
+    use_imu: false
 
     # ── Observation Source ──
     observation_mode: "onnx"  # "onnx" for real-time detection, "file" for precomputed, "none" to disable
