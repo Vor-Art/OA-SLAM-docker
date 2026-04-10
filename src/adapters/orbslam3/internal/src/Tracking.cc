@@ -2685,6 +2685,12 @@ void Tracking::Track()
             }
             /////////////////////////////////// End Objects Tracking ///////////////////////////////////
 
+            // Refresh the current-frame overlays after object tracking updated
+            // the active tracks for this frame. The earlier drawer update keeps
+            // the viewer responsive during tracking, but without this second
+            // pass the per-box debug labels lag one frame behind.
+            mpFrameDrawer->Update(this);
+
             // We allow points with high innovation (considererd outliers by the Huber Function)
             // pass to the new keyframe, so that bundle adjustment will finally decide
             // if they are outliers or not. We don't want next frame to estimate its position
