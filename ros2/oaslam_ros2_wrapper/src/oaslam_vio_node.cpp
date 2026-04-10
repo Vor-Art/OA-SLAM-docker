@@ -212,7 +212,6 @@ class OaSlamVioNode : public rclcpp::Node {
     session_config.slam_backend.use_objects_in_local_ba = 0;
     session_config.slam_backend.relocalization_mode =
         ParseRelocalizationMode(relocalization_mode);
-    session_config.slam_backend.kind = oaslam::SlamBackendKind::OrbSlam3;
     session_config.slam_backend.use_imu = use_imu;
     session_config.visualizer.enabled = use_viewer;
     session_config.agent_gateway.enabled = false;

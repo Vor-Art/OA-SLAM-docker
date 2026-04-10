@@ -19,7 +19,7 @@ set -u
 export HOME="${HOME:-/root}"
 export ROS_HOME="${ROS_HOME:-${HOME}/.ros}"
 mkdir -p "${HOME}" "${ROS_HOME}"
-export LD_LIBRARY_PATH="${OASLAM_CPP_INSTALL_PREFIX}/lib:/opt/OA-SLAM/Thirdparty/DBoW2/lib:/opt/OA-SLAM/Thirdparty/g2o/lib:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="${OASLAM_CPP_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 
 LAUNCH_FILE="${OASLAM_ROS2_LAUNCH_FILE:-oaslam_wrapper.launch.py}"
 PARAMS_FILE="${OASLAM_ROS2_PARAMS_FILE:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper.yaml}"

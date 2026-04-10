@@ -1,12 +1,12 @@
 #include "src/adapters/observations/onnx_observation_source.h"
 
-#include "src/adapters/orbslam2/internal/include/ImageDetections.h"
+#include "src/adapters/orbslam3/internal/include/ImageDetections.h"
 #include "src/common/opencv_utils.h"
 
 namespace oaslam {
 
 OnnxObservationSource::OnnxObservationSource(const ObservationSourceConfig& config) {
-  detector_ = std::make_shared<ORB_SLAM2::ObjectDetector>(
+  detector_ = std::make_shared<ORB_SLAM3::ObjectDetector>(
       config.source_path, config.ignored_categories, config.model_input_width,
       config.model_input_height);
 }

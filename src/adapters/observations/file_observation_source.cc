@@ -1,12 +1,12 @@
 #include "src/adapters/observations/file_observation_source.h"
 
-#include "src/adapters/orbslam2/internal/include/ImageDetections.h"
+#include "src/adapters/orbslam3/internal/include/ImageDetections.h"
 #include "src/common/opencv_utils.h"
 
 namespace oaslam {
 
 FileObservationSource::FileObservationSource(const ObservationSourceConfig& config) {
-  detector_ = std::make_shared<ORB_SLAM2::DetectionsFromFile>(config.source_path,
+  detector_ = std::make_shared<ORB_SLAM3::DetectionsFromFile>(config.source_path,
                                                               config.ignored_categories);
 }
 

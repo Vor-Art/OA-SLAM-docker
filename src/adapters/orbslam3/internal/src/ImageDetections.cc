@@ -392,8 +392,13 @@ std::vector<Detection::Ptr> DetectionsFromFile::detect(unsigned int idx) const {
 
 #ifdef USE_DNN
 
-ObjectDetector::ObjectDetector(const std::string& model, const std::vector<int>& cats_to_ignore) 
-    : network_(std::make_unique<cv::dnn::Net>()), ignored_cats_(cats_to_ignore.begin(), cats_to_ignore.end()), ImageDetectionsManager()
+ObjectDetector::ObjectDetector(const std::string& model, const std::vector<int>& cats_to_ignore,
+                               int input_width, int input_height)
+    : network_(std::make_unique<cv::dnn::Net>()),
+      ignored_cats_(cats_to_ignore.begin(), cats_to_ignore.end()),
+      input_width_(input_width > 0 ? input_width : 640),
+      input_height_(input_height > 0 ? input_height : 640),
+      ImageDetectionsManager()
 {
     if (model.substr(model.size()-4) == "onnx")
         *network_ =  cv::dnn::readNet(model);
@@ -407,8 +412,8 @@ std::vector<Detection::Ptr> ObjectDetector::detect(cv::Mat img) const
 {
 
     // Settings
-    const int INPUT_WIDTH = 640.0/2; // size of image passed to the network (reducing may be faster to process)
-    const int INPUT_HEIGHT = 640.0/2;
+    const int INPUT_WIDTH = input_width_;
+    const int INPUT_HEIGHT = input_height_;
     const float SCORE_THRESHOLD = 0.5;
     const float NMS_THRESHOLD = 0.45;
     const float CONFIDENCE_THRESHOLD = 0.45;

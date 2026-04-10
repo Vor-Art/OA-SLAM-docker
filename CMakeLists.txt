@@ -4,14 +4,11 @@ project(oaslam VERSION 0.1.0 LANGUAGES CXX C)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-option(BUILD_ORBSLAM3 "Build ORB-SLAM3 adapter" ON)
-
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "BUILD_ORBSLAM3: ${BUILD_ORBSLAM3}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,48 +32,6 @@ endif()
 find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(dlib REQUIRED)
-
-set(LEGACY_INTERNAL_DIR ${PROJECT_SOURCE_DIR}/src/adapters/orbslam2/internal)
-set(LEGACY_INTERNAL_INCLUDE_DIR ${LEGACY_INTERNAL_DIR}/include)
-set(LEGACY_INTERNAL_SOURCE_DIR ${LEGACY_INTERNAL_DIR}/src)
-
-set(LEGACY_INTERNAL_SOURCES
-  ${LEGACY_INTERNAL_SOURCE_DIR}/System.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Tracking.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/LocalMapping.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/LoopClosing.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/ORBextractor.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/ORBmatcher.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/FrameDrawer.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Converter.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/MapPoint.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/KeyFrame.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Map.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/MapDrawer.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Optimizer.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/PnPsolver.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Frame.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/KeyFrameDatabase.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Sim3Solver.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Initializer.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Viewer.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/ImageDetections.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Ellipse.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Ellipsoid.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/ObjectTrack.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Distance.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/MapObject.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/OptimizerObject.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/LocalObjectMapping.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Utils.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/ColorManager.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Reconstruction.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Camera.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Scene.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/p3p.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/Localization.cc
-  ${LEGACY_INTERNAL_SOURCE_DIR}/ARViewer.cc
-)
 
 set(OASLAM_COMMON_SOURCES
   src/common/file_utils.cc
@@ -110,60 +65,9 @@ target_include_directories(oaslam_common
 )
 target_link_libraries(oaslam_common PUBLIC oaslam_ports Eigen3::Eigen ${OpenCV_LIBS} stdc++fs)
 
-add_library(oaslam_legacy_internal STATIC ${LEGACY_INTERNAL_SOURCES})
-target_include_directories(oaslam_legacy_internal PRIVATE
-  ${PROJECT_SOURCE_DIR}
-  ${LEGACY_INTERNAL_INCLUDE_DIR}
-  ${EIGEN3_INCLUDE_DIR}
-  ${Pangolin_INCLUDE_DIRS}
-)
-target_link_libraries(oaslam_legacy_internal PUBLIC
-  ${OpenCV_LIBS}
-  Eigen3::Eigen
-  ${Pangolin_LIBRARIES}
-  ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
-  ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
-  stdc++fs
-  dlib::dlib
-)
-
-add_library(oaslam_adapter_observations STATIC
-  src/adapters/observations/file_observation_source.cc
-  src/adapters/observations/onnx_observation_source.cc
-)
-target_include_directories(oaslam_adapter_observations
-  PUBLIC
-    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-)
-target_link_libraries(oaslam_adapter_observations PUBLIC
-  oaslam_ports
-  oaslam_common
-  oaslam_legacy_internal
-)
-
-add_library(oaslam_adapter_orbslam2 STATIC
-  src/adapters/orbslam2/orbslam2_backend_adapter.cc
-)
-target_include_directories(oaslam_adapter_orbslam2
-  PUBLIC
-    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-  PRIVATE
-    ${LEGACY_INTERNAL_INCLUDE_DIR}
-)
-target_link_libraries(oaslam_adapter_orbslam2 PUBLIC
-  oaslam_ports
-  oaslam_common
-  oaslam_legacy_internal
-)
-
 # ===========================================================================
-# ORB-SLAM3 adapter (conditional)
+# ORB-SLAM3 adapter
 # ===========================================================================
-if(BUILD_ORBSLAM3)
 
 find_package(OpenSSL REQUIRED)
 find_package(Boost REQUIRED COMPONENTS serialization)
@@ -187,7 +91,7 @@ endif()
 # --- g2o for ORB-SLAM3 (config.h is pre-generated in the source tree) ---
 set(ORBSLAM3_G2O_DIR ${ORBSLAM3_THIRDPARTY_DIR}/g2o)
 
-# --- ORB-SLAM3 Thirdparty g2o (static, separate target name to avoid conflict) ---
+# --- ORB-SLAM3 Thirdparty g2o (static) ---
 add_library(orbslam3_g2o STATIC
   ${ORBSLAM3_G2O_DIR}/g2o/types/types_sba.cpp
   ${ORBSLAM3_G2O_DIR}/g2o/types/types_six_dof_expmap.cpp
@@ -235,7 +139,7 @@ set_target_properties(orbslam3_g2o PROPERTIES
   CXX_STANDARD 17
 )
 
-# --- ORB-SLAM3 Thirdparty DBoW2 (static, separate target name) ---
+# --- ORB-SLAM3 Thirdparty DBoW2 (static) ---
 set(ORBSLAM3_DBOW2_DIR ${ORBSLAM3_THIRDPARTY_DIR}/DBoW2)
 add_library(orbslam3_DBoW2 STATIC
   ${ORBSLAM3_DBOW2_DIR}/DBoW2/BowVector.cpp
@@ -358,10 +262,22 @@ set_target_properties(oaslam_adapter_orbslam3 PROPERTIES
   CXX_STANDARD 17
 )
 
-# Compile definition so module_factories.cc knows ORB-SLAM3 is available
-add_definitions(-DBUILD_ORBSLAM3)
+add_library(oaslam_adapter_observations STATIC
+  src/adapters/observations/file_observation_source.cc
+  src/adapters/observations/onnx_observation_source.cc
+)
+target_include_directories(oaslam_adapter_observations
+  PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(oaslam_adapter_observations PUBLIC
+  oaslam_ports
+  oaslam_common
+  oaslam_orbslam3_internal
+)
 
-endif(BUILD_ORBSLAM3)
 # ===========================================================================
 
 add_library(oaslam_adapter_oa_objects STATIC
@@ -416,15 +332,12 @@ target_include_directories(oaslam_app
 target_link_libraries(oaslam_app PUBLIC
   oaslam_ports
   oaslam_common
-  oaslam_adapter_orbslam2
+  oaslam_adapter_orbslam3
   oaslam_adapter_observations
   oaslam_adapter_oa_objects
   oaslam_adapter_visualization
   oaslam_adapter_agent
 )
-if(BUILD_ORBSLAM3)
-  target_link_libraries(oaslam_app PUBLIC oaslam_adapter_orbslam3)
-endif()
 
 add_library(oaslam_sdk INTERFACE)
 target_include_directories(oaslam_sdk INTERFACE
@@ -448,9 +361,11 @@ set(_OASLAM_INSTALL_TARGETS
   oaslam_core
   oaslam_ports
   oaslam_common
-  oaslam_legacy_internal
+  orbslam3_g2o
+  orbslam3_DBoW2
+  oaslam_orbslam3_internal
+  oaslam_adapter_orbslam3
   oaslam_adapter_observations
-  oaslam_adapter_orbslam2
   oaslam_adapter_oa_objects
   oaslam_adapter_visualization
   oaslam_adapter_agent
@@ -458,14 +373,6 @@ set(_OASLAM_INSTALL_TARGETS
   oaslam_sdk
   oa-slam
 )
-if(BUILD_ORBSLAM3)
-  list(APPEND _OASLAM_INSTALL_TARGETS
-    orbslam3_g2o
-    orbslam3_DBoW2
-    oaslam_orbslam3_internal
-    oaslam_adapter_orbslam3
-  )
-endif()
 
 install(TARGETS ${_OASLAM_INSTALL_TARGETS}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -474,14 +381,6 @@ install(TARGETS ${_OASLAM_INSTALL_TARGETS}
 )
 
 install(DIRECTORY include/oaslam DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
-# Install legacy Thirdparty shared libraries so they are available from the
-# install prefix (the oaslam_legacy_internal static lib links against them).
-install(FILES
-  ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
-  ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
 
 # Generate a lightweight package config so that the ROS 2 wrapper (and any
 # other downstream project) can do  find_package(oaslam CONFIG REQUIRED)

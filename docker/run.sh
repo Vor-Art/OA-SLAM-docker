@@ -76,7 +76,6 @@ build_cpp() {
       -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
       -DCUDAToolkit_ROOT=/usr/local/cuda
 
-    cmake --build "${BUILD_DIR}" --parallel "${JOBS}" --target oaslam_legacy_internal
     cmake --build "${BUILD_DIR}" --parallel "${ORBSLAM3_THIRDPARTY_JOBS}" --target orbslam3_g2o orbslam3_DBoW2
     cmake --build "${BUILD_DIR}" --parallel "${ORBSLAM3_INTERNAL_JOBS}" --target oaslam_orbslam3_internal
     cmake --build "${BUILD_DIR}" --parallel "${JOBS}" -- --output-sync=target
@@ -91,7 +90,7 @@ build_ros2() {
     export ROS_WS="${ROS_WS:-/opt/oaslam_ros2_ws}"
     export OASLAM_CPP_INSTALL_PREFIX="${OASLAM_CPP_INSTALL_PREFIX:-/opt/oaslam_artifacts/cpp/install}"
     export CMAKE_PREFIX_PATH="${OASLAM_CPP_INSTALL_PREFIX}:${CMAKE_PREFIX_PATH:-}"
-    export LD_LIBRARY_PATH="${OASLAM_CPP_INSTALL_PREFIX}/lib:/opt/OA-SLAM/Thirdparty/DBoW2/lib:/opt/OA-SLAM/Thirdparty/g2o/lib:${LD_LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="${OASLAM_CPP_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 
     if [[ ! -x "${OASLAM_CPP_INSTALL_PREFIX}/bin/oa-slam" ]]; then
       echo "OA-SLAM C++ artifacts are missing. Run ./docker/run.sh rebuild-cpp first." >&2

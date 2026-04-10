@@ -22,12 +22,12 @@
 ///   - Configurable max_depth_dt_sec for temporal synchronization.
 ///
 /// Usage (launch):
-///   ros2 launch oaslam_ros2_wrapper oaslam_offline_vio.launch.py \
-///       bag_path:=/path/to/rosbag  output_folder:=/path/to/output
+///   ros2 launch oaslam_ros2_wrapper oaslam_offline_vio.launch.py
+///     bag_path:=/path/to/rosbag output_folder:=/path/to/output
 ///
 /// Usage (direct):
-///   ros2 run oaslam_ros2_wrapper oaslam_offline_vio_node \
-///       --ros-args -p bag_path:=/path/to/rosbag ...
+///   ros2 run oaslam_ros2_wrapper oaslam_offline_vio_node
+///     --ros-args -p bag_path:=/path/to/rosbag ...
 
 #include <Eigen/Geometry>
 
@@ -325,7 +325,6 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     cfg.slam_backend.use_ar_viewer = false;
     cfg.slam_backend.use_objects_in_local_ba = 0;
     cfg.slam_backend.relocalization_mode = ParseRelocalizationMode(relocalization_mode);
-    cfg.slam_backend.kind = oaslam::SlamBackendKind::OrbSlam3;
     cfg.slam_backend.use_imu = use_imu;
     cfg.visualizer.enabled = use_viewer;
     cfg.agent_gateway.enabled = false;

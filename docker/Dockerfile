@@ -155,18 +155,6 @@ RUN git clone --depth 1 --branch 1.22.10 https://github.com/strasdat/Sophus.git 
     make install && \
     rm -rf /tmp/Sophus
 
-# -------------------------------
-# Build third-party dependencies (cached layer)
-COPY Thirdparty/DBoW2 /opt/OA-SLAM/Thirdparty/DBoW2
-RUN cd /opt/OA-SLAM/Thirdparty/DBoW2 && \
-    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build --parallel ${NPROC}
-
-COPY Thirdparty/g2o /opt/OA-SLAM/Thirdparty/g2o
-RUN cd /opt/OA-SLAM/Thirdparty/g2o && \
-    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build --parallel ${NPROC}
-
 # Vocabulary (rarely changes)
 COPY Vocabulary /opt/OA-SLAM/Vocabulary
 RUN cd /opt/OA-SLAM/Vocabulary && tar -xf ORBvoc.txt.tar.gz
