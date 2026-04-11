@@ -1,32 +1,7 @@
-/// @file oaslam_offline_vio_node.cpp
-/// @brief Offline VIO node that reads a ROS2 bag (sqlite3) directly and
-///        processes frames sequentially through the OA-SLAM pipeline.
-///
-/// Messages are consumed incrementally — streamed and processed on the fly
-/// in storage order — without loading the entire bag into memory.  This
-/// allows processing of very large bags (30 GB+) with bounded memory usage.
-///
-/// The reader delivers messages in bag-storage order (typically chronological
-/// across all topics).  IMU samples are accumulated in a bounded deque, depth
-/// images are kept in a small sliding window, and each RGB image triggers
-/// immediate frame processing.
-///
-/// Runtime behavior:
-///   - Messages are streamed directly from the bag in storage order.
-///   - Frames without a usable depth image are skipped instead of sending an
-///     empty cv::Mat into ORB-SLAM3.
-///
-/// Usage (launch):
-///   ros2 launch oaslam_ros2_wrapper oaslam_offline_vio.launch.py
-///     bag_path:=/path/to/rosbag output_folder:=/path/to/output
-///
-/// Usage (direct):
-///   ros2 run oaslam_ros2_wrapper oaslam_offline_vio_node
-///     --ros-args -p bag_path:=/path/to/rosbag ...
-
 #include <Eigen/Geometry>
 
 #include <cv_bridge/cv_bridge.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialization.hpp>
 #include <rosbag2_cpp/reader.hpp>
@@ -35,23 +10,16 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
-#include <unistd.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <chrono>
 #include <deque>
-#include <filesystem>
-#include <iostream>
 #include <map>
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
-#include "oaslam/app/module_factories.h"
-#include "oaslam/app/slam_session.h"
 #include "oaslam/core/frame_packet.h"
 #include "session_config_utils.h"
 
@@ -59,9 +27,6 @@
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 namespace {
-
-constexpr int kMaxKeyframeQueueDepth = 2;
-constexpr int kBackpressureSleepUs = 50;
 
 /// Maximum number of recent depth images to keep in the sliding window.
 constexpr size_t kMaxDepthWindowSize = 10;
@@ -111,62 +76,37 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
  public:
   explicit OaSlamOfflineVioNode(const rclcpp::NodeOptions& options)
       : rclcpp::Node("oaslam_offline_vio_node", options) {
-    // ── Bag path (required) ──
-    bag_path_ = declare_parameter<std::string>("bag_path", "");
-    if (bag_path_.empty()) {
-      throw std::runtime_error("'bag_path' parameter is required (path to rosbag directory)");
-    }
-    if (!std::filesystem::exists(bag_path_)) {
-      throw std::runtime_error("Bag path does not exist: " + bag_path_);
-    }
+    topics_ = oaslam_ros2_wrapper::DeclareOfflineTopicParameters(*this);
+    runtime_ = oaslam_ros2_wrapper::CreateNodeRuntime(*this);
+    
+    // Set up publishers
+    pose_publisher_ =
+        create_publisher<geometry_msgs::msg::PoseStamped>(topics_.publisher.pose_topic, 10);
 
-    // ── Topic names ──
-    rgb_topic_ = declare_parameter<std::string>("rgb_topic", "/camera/color/image_raw");
-    depth_topic_ = declare_parameter<std::string>(
-        "depth_topic", "/camera/aligned_depth_to_color/image_raw");
-    imu_topic_ = declare_parameter<std::string>("imu_topic", "/camera/imu");
+        oaslam_ros2_wrapper::LogNodeStartup(
+        get_logger(), "offline VIO", runtime_.session_params,
+        {{"Bag path", topics_.bag_path},
+         {"RGB topic", topics_.shared.rgb_topic},
+         {"Depth topic", topics_.shared.depth_topic},
+         {"IMU topic", topics_.shared.imu_topic},
+         {"Pose topic", topics_.publisher.pose_topic},
+         {"World frame", topics_.publisher.world_frame_id},
+         {"Camera ID", topics_.shared.camera_id},
+         {"Output folder", runtime_.session_params.output_folder}});
+  }
 
-    // ── Camera / SLAM config ──
-    camera_id_ = declare_parameter<std::string>("camera_id", "rgbd0");
-    const auto common_params =
-        oaslam_ros2_wrapper::DeclareCommonSessionParameters(*this);
-
-    // ── Open TUM trajectory file ──
-    const std::string tum_path =
-        oaslam_ros2_wrapper::OpenTumTrajectoryFile(
-            tum_file_, common_params.output_folder);
-    if (!tum_path.empty()) {
-      RCLCPP_INFO(get_logger(), "Saving trajectory (TUM) to: %s", tum_path.c_str());
-    }
-
-    // ── Configure SLAM session ──
-    const oaslam::SessionConfig cfg =
-        oaslam_ros2_wrapper::BuildSessionConfig(common_params);
-
-    session_ = std::make_unique<oaslam::SlamSession>(
-        cfg, oaslam::CreateDefaultModules(cfg));
-
-    RCLCPP_INFO(get_logger(),
-                "OA-SLAM Offline VIO node initialized (ORB-SLAM3, IMU=%s)\n"
-                "  Bag:   %s\n"
-                "  RGB:   %s\n"
-                "  Depth: %s\n"
-                "  IMU:   %s",
-                common_params.use_imu ? "enabled" : "disabled",
-                bag_path_.c_str(), rgb_topic_.c_str(),
-                depth_topic_.c_str(),
-                imu_topic_.c_str());
+  ~OaSlamOfflineVioNode() override {
+    oaslam_ros2_wrapper::ShutdownNodeRuntime(runtime_, get_logger());
   }
 
   /// Run the full offline pipeline: open bag -> stream -> process -> save.
   void Run() {
-    RCLCPP_INFO(get_logger(), "Opening rosbag: %s", bag_path_.c_str());
+    RCLCPP_INFO(get_logger(), "Opening rosbag: %s", topics_.bag_path.c_str());
 
     // ── Open the bag ──
     rosbag2_cpp::Reader reader;
     rosbag2_storage::StorageOptions storage_opts;
-    storage_opts.uri = bag_path_;
-    // storage_opts.storage_id = "sqlite3";
+    storage_opts.uri = topics_.bag_path;
 
     rosbag2_cpp::ConverterOptions converter_opts;
     converter_opts.input_serialization_format = "cdr";
@@ -193,31 +133,29 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 "  RGB topic:   '%s' -> %s\n"
                 "  Depth topic: '%s' -> %s\n"
                 "  IMU topic:   '%s' -> %s",
-                rgb_topic_.c_str(),
-                topic_type_map.count(rgb_topic_) ? "FOUND" : "NOT FOUND",
-                depth_topic_.c_str(),
-                topic_type_map.count(depth_topic_) ? "FOUND" : "NOT FOUND",
-                imu_topic_.c_str(),
-                topic_type_map.count(imu_topic_) ? "FOUND" : "NOT FOUND");
+                topics_.shared.rgb_topic.c_str(),
+                topic_type_map.count(topics_.shared.rgb_topic) ? "FOUND" : "NOT FOUND",
+                topics_.shared.depth_topic.c_str(),
+                topic_type_map.count(topics_.shared.depth_topic) ? "FOUND" : "NOT FOUND",
+                topics_.shared.imu_topic.c_str(),
+                topic_type_map.count(topics_.shared.imu_topic) ? "FOUND" : "NOT FOUND");
 
-    // Verify RGB and IMU topics exist
-    if (topic_type_map.find(rgb_topic_) == topic_type_map.end()) {
+    // Verify required topics exist
+    if (topic_type_map.find(topics_.shared.rgb_topic) == topic_type_map.end()) {
       RCLCPP_ERROR(get_logger(), "RGB topic '%s' not found in bag! Aborting.",
-                   rgb_topic_.c_str());
-      session_->shutdown();
-      session_.reset();
+                   topics_.shared.rgb_topic.c_str());
+      oaslam_ros2_wrapper::ShutdownNodeRuntime(runtime_, get_logger());
       return;
     }
-    if (topic_type_map.find(depth_topic_) == topic_type_map.end()) {
+    if (topic_type_map.find(topics_.shared.depth_topic) == topic_type_map.end()) {
       RCLCPP_ERROR(get_logger(), "Depth topic '%s' not found in bag! Aborting.",
-                   depth_topic_.c_str());
-      session_->shutdown();
-      session_.reset();
+                   topics_.shared.depth_topic.c_str());
+      oaslam_ros2_wrapper::ShutdownNodeRuntime(runtime_, get_logger());
       return;
     }
-    if (topic_type_map.find(imu_topic_) == topic_type_map.end()) {
+    if (topic_type_map.find(topics_.shared.imu_topic) == topic_type_map.end()) {
       RCLCPP_WARN(get_logger(), "IMU topic '%s' not found in bag. Proceeding without IMU.",
-                  imu_topic_.c_str());
+                  topics_.shared.imu_topic.c_str());
     }
 
     // ── Streaming state ──
@@ -282,7 +220,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       // ────────────────────────────────────────────────────────────────
       // IMU message
       // ────────────────────────────────────────────────────────────────
-      if (topic == imu_topic_) {
+      if (topic == topics_.shared.imu_topic) {
         total_imu_in_bag++;
 
         auto imu_msg = DeserializeMessage<sensor_msgs::msg::Imu>(bag_msg);
@@ -316,7 +254,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       // ────────────────────────────────────────────────────────────────
       // Depth message
       // ────────────────────────────────────────────────────────────────
-      if (topic == depth_topic_) {
+      if (topic == topics_.shared.depth_topic) {
         total_depth_in_bag++;
 
         const double ts = NanosToSeconds(bag_msg->time_stamp);
@@ -332,7 +270,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       // ────────────────────────────────────────────────────────────────
       // RGB message — triggers frame processing
       // ────────────────────────────────────────────────────────────────
-      if (topic == rgb_topic_) {
+      if (topic == topics_.shared.rgb_topic) {
         total_rgb_in_bag++;
 
         const double image_timestamp = NanosToSeconds(bag_msg->time_stamp);
@@ -368,9 +306,9 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
 
           // Write fallback trajectory line for skipped frame
           total_poses_interpolated++;
-          if (tum_file_.is_open()) {
+          if (runtime_.tum_trajectory_file.is_open()) {
             oaslam_ros2_wrapper::WriteTumPoseLine(
-                tum_file_, image_timestamp, last_known_pose);
+                runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
           }
           frame_counter++;
           continue;  // SKIP — do NOT pass null depth to SLAM
@@ -385,9 +323,9 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           RCLCPP_WARN(get_logger(), "Frame %lu: failed to convert RGB: %s",
                       static_cast<unsigned long>(frame_counter), exc.what());
           total_poses_interpolated++;
-          if (tum_file_.is_open()) {
+          if (runtime_.tum_trajectory_file.is_open()) {
             oaslam_ros2_wrapper::WriteTumPoseLine(
-                tum_file_, image_timestamp, last_known_pose);
+                runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
           }
           frame_counter++;
           continue;
@@ -431,9 +369,9 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         if (!has_depth) {
           total_frames_skipped_no_depth++;
           total_poses_interpolated++;
-          if (tum_file_.is_open()) {
+          if (runtime_.tum_trajectory_file.is_open()) {
             oaslam_ros2_wrapper::WriteTumPoseLine(
-                tum_file_, image_timestamp, last_known_pose);
+                runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
           }
           frame_counter++;
           continue;  // SKIP — do NOT pass invalid depth to SLAM
@@ -481,7 +419,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         oaslam::FramePacket frame;
         frame.frame_id = frame_counter++;
         frame.timestamp = image_timestamp;
-        frame.camera_id = camera_id_;
+        frame.camera_id = topics_.shared.camera_id;
         frame.image = cv_rgb->image.clone();
         frame.depth_image = depth_mat.clone();
         frame.has_depth = true;
@@ -489,25 +427,27 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         frame.has_imu = !frame.imu_measurements.empty();
 
         // ── 10. Backpressure ──
-        while (session_->keyframesInQueue() > kMaxKeyframeQueueDepth) {
-          usleep(kBackpressureSleepUs);
-        }
+        oaslam_ros2_wrapper::WaitForMappingBackpressure(*runtime_.session);
 
         // ── 11. Process frame ──
-        const auto result = session_->processFrame(frame);
+        const auto result = runtime_.session->processFrame(frame);
         total_frames_processed++;
 
         // ── 12. Write trajectory line (ALWAYS — 1:1 with RGB images) ──
         if (result.tracking.has_pose) {
           total_poses_obtained++;
           last_known_pose = result.tracking.T_world_camera;
+          pose_publisher_->publish(oaslam_ros2_wrapper::ToPoseStamped(
+              rgb_msg->header,
+              topics_.publisher.world_frame_id,
+              result.tracking.T_world_camera));
         } else {
           total_poses_interpolated++;
         }
 
-        if (tum_file_.is_open()) {
+        if (runtime_.tum_trajectory_file.is_open()) {
           oaslam_ros2_wrapper::WriteTumPoseLine(
-              tum_file_, image_timestamp, last_known_pose);
+              runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
         }
 
         // ── 13. Progress logging ──
@@ -547,9 +487,9 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       const std::string type_str = topic_type_map.count(tname)
           ? topic_type_map.at(tname) : "(unknown)";
       const char* role = "";
-      if (tname == rgb_topic_) role = " [RGB]";
-      else if (tname == depth_topic_) role = " [DEPTH]";
-      else if (tname == imu_topic_) role = " [IMU]";
+      if (tname == topics_.shared.rgb_topic) role = " [RGB]";
+      else if (tname == topics_.shared.depth_topic) role = " [DEPTH]";
+      else if (tname == topics_.shared.imu_topic) role = " [IMU]";
       else role = " [ignored]";
       RCLCPP_INFO(get_logger(), "  '%s' [%s]: %lu messages%s",
                   tname.c_str(), type_str.c_str(),
@@ -581,34 +521,17 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 static_cast<unsigned long>(total_frames_skipped_no_depth),
                 static_cast<unsigned long>(total_poses_obtained),
                 static_cast<unsigned long>(total_poses_interpolated),
-                depth_topic_.c_str(),
+                topics_.shared.depth_topic.c_str(),
                 static_cast<unsigned long>(total_rgb_in_bag),
                 total_sec,
                 total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0);
-
-    // Flush trajectory file
-    if (tum_file_.is_open()) {
-      tum_file_.flush();
-      tum_file_.close();
-      RCLCPP_INFO(get_logger(), "Camera trajectory file saved and closed.");
-    }
-
-    // Graceful shutdown
-    RCLCPP_INFO(get_logger(), "Shutting down SLAM session...");
-    session_->shutdown();
-    session_.reset();
-    RCLCPP_INFO(get_logger(), "SLAM session shut down cleanly.");
+    oaslam_ros2_wrapper::ShutdownNodeRuntime(runtime_, get_logger());
   }
 
  private:
-  std::unique_ptr<oaslam::SlamSession> session_;
-  std::ofstream tum_file_;
-
-  std::string bag_path_;
-  std::string rgb_topic_;
-  std::string depth_topic_;
-  std::string imu_topic_;
-  std::string camera_id_;
+  oaslam_ros2_wrapper::NodeRuntime runtime_;
+  oaslam_ros2_wrapper::OfflineTopicParams topics_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher_;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

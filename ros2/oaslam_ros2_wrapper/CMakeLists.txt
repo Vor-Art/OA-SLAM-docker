@@ -32,7 +32,9 @@ target_link_libraries(oaslam_ros2_wrapper_common
   oaslam::oaslam_sdk
 )
 ament_target_dependencies(oaslam_ros2_wrapper_common
+  geometry_msgs
   rclcpp
+  std_msgs
 )
 
 add_executable(oaslam_vio_node
