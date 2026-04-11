@@ -1,53 +1,30 @@
 oaslam_offline_vio_node:
   ros__parameters:
-    # ── Rosbag input ──
-    # bag_path: "/opt/OA-SLAM/Data/realsense_recording/dynamic_robot_1_uncompressed"  # REQUIRED: path to the rosbag directory (sqlite3 format)
-    bag_path: "/opt/OA-SLAM/Data/realsense_recording/work_environment"  # REQUIRED: path to the rosbag directory (sqlite3 format)
-
-    # ── Topics inside the bag ──
+    # Input
     rgb_topic: "/upper/realsense_upper/color/image_raw"
     depth_topic: "/upper/realsense_upper/aligned_depth_to_color/image_raw"
     imu_topic: "/upper/realsense_upper/imu"
+    bag_path: "/opt/OA-SLAM/Data/realsense_recording/work_environment"
 
-    # ── Depth topic override (workaround for recording bugs) ──
-    # When the depth images were recorded under a wrong topic name (e.g. "/"
-    # due to a topic remapping bug in ros2 bag record), set this to the
-    # actual topic name present in the bag's metadata.yaml.
-    #
-    # This takes priority over depth_topic.  If left empty, the node will
-    # first try depth_topic, then auto-detect by scanning for non-RGB
-    # sensor_msgs/msg/Image topics.
-    #
-    # For the dynamic_robot_1_uncompressed bag where depth landed on "/":
-    depth_topic_override: ""
+    # Publishers
+    pose_topic: "/oa_slam/camera_pose"
+    world_frame_id: "map"
 
-    # ── Temporal synchronization ──
-    # Maximum allowable time difference (seconds) between an RGB frame and
-    # its nearest depth frame for them to be considered a matched pair.
-    # Default 33ms matches 30fps cameras.  Increase if RGB and depth have
-    # different frame rates or significant timestamp jitter.
-    max_depth_dt_sec: 0.1
-
-    # ── SLAM Backend ──
+    # SLAM Backend
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
     camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/d435i_imu_rgbd.yaml"
     use_viewer: true
     use_imu: false
+    use_sim_time: false
 
-    # ── Observation Source ──
-    observation_mode: "onnx"  # "onnx" for real-time detection, "file" for precomputed, "none" to disable
+    # Observation Source
+    observation_mode: "onnx"  # "onnx", "file", or "none"
     detection_model_path: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
     detection_file_path: ""
     ignored_categories_file: ""
-    # onnx_model_path: ""
-    onnx_model_path: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
 
-  
-    # ── Relocalization ──
-    relocalization_mode: "points_and_objects"  # "points", "objects", "points_and_objects"
+    # Relocalization
+    relocalization_mode: "points_and_objects"  # "points", "objects", or "points_and_objects"
 
-    # ── Output ──
-    output_folder: "/opt/OA-SLAM/Data/run/"  # Set to a directory path to save CameraTrajectory.txt in TUM format
-
-    # ── Camera ID ──
-    camera_id: "rgbd0"
+    # Output
+    output_folder: "/opt/OA-SLAM/Data/run/"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format

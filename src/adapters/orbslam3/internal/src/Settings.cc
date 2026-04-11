@@ -443,6 +443,11 @@ namespace ORB_SLAM3 {
 
         fps_ = readParameter<int>(fSettings,"Camera.fps",found);
         bRGB_ = (bool) readParameter<int>(fSettings,"Camera.RGB",found);
+        centerReprojectionThresholdPx_ = readParameter<float>(
+            fSettings, "Detector.CenterReprojectionThresholdPx", found, false);
+        if(!found) {
+            centerReprojectionThresholdPx_ = 100.0f;
+        }
     }
 
     void Settings::readIMU(cv::FileStorage &fSettings) {

@@ -93,6 +93,7 @@ namespace ORB_SLAM3 {
         bool insertKFsWhenLost() {return insertKFsWhenLost_;}
 
         float depthMapFactor() {return depthMapFactor_;}
+        float centerReprojectionThresholdPx() {return centerReprojectionThresholdPx_;}
 
         int nFeatures() {return nFeatures_;}
         int nLevels() {return nLevels_;}
@@ -214,6 +215,7 @@ namespace ORB_SLAM3 {
          * RGBD stuff
          */
         float depthMapFactor_;
+        float centerReprojectionThresholdPx_ = 100.0f;
 
         /*
          * ORB stuff

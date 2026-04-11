@@ -1,5 +1,14 @@
 oaslam_vio_node:
   ros__parameters:
+    # Input
+    rgb_topic: "/upper/realsense_upper/color/image_raw"
+    depth_topic: "/upper/realsense_upper/aligned_depth_to_color/image_raw"
+    imu_topic: "/upper/realsense_upper/imu"
+
+    # Publishers
+    pose_topic: "/oa_slam/camera_pose"
+    world_frame_id: "map"
+
     # SLAM Backend
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
     camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/d435i_imu_rgbd.yaml"
@@ -8,21 +17,13 @@ oaslam_vio_node:
     use_sim_time: true
 
     # Observation Source
-    observation_mode: "none"  # "onnx" for real-time detection, "file" for precomputed, "none" to disable
-    detection_model_path: ""
+    observation_mode: "onnx"  # "onnx", "file", or "none"
+    detection_model_path: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
     detection_file_path: ""
     ignored_categories_file: ""
 
     # Relocalization
-    relocalization_mode: "points_and_objects"  # "points", "objects", "points_and_objects"
+    relocalization_mode: "points_and_objects"  # "points", "objects", or "points_and_objects"
 
-    # Output — set to a directory path to save CameraTrajectory.txt in TUM format
-    output_folder: "/opt/OA-SLAM/Data/run/"
-
-    # Topics
-    rgb_topic: "/upper/realsense_upper/color/image_raw"
-    depth_topic: "/upper/realsense_upper/aligned_depth_to_color/image_raw"
-    imu_topic: "/upper/realsense_upper/imu"
-
-    pose_topic: /oa_slam/camera_pose
-    world_frame_id: map
+    # Output
+    output_folder: "/opt/OA-SLAM/Data/run/"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format

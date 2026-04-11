@@ -184,11 +184,9 @@ bool ObjectTrack::ReconstructFromCenter(bool use_keyframes)
         Rts = Rts_.to_vector();
         bboxes = bboxes_.to_vector();
     }
-
-
-
-
-    auto [status, ellipsoid] = ReconstructEllipsoidFromCenters(bboxes, Rts, tracker_->GetK());
+    auto [status, ellipsoid] = ReconstructEllipsoidFromCenters(
+        bboxes, Rts, tracker_->GetK(),
+        tracker_->GetCenterReprojectionThresholdPx());
 
     if (!status)
         return false;

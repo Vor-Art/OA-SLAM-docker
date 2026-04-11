@@ -123,7 +123,8 @@ Eigen::Vector3d TriangulatePointsRansac(const std::vector<Eigen::Vector2d, Eigen
 std::pair<bool, Ellipsoid>
 ReconstructEllipsoidFromCenters(const std::vector<BBox2, Eigen::aligned_allocator<BBox2>>& bboxes,
                                 const std::vector<Matrix34d, Eigen::aligned_allocator<Matrix34d>>& Rts, 
-                                const Eigen::Matrix3d& K)
+                                const Eigen::Matrix3d& K,
+                                double center_reprojection_threshold_px)
 {
     size_t n = bboxes.size();
 
@@ -153,7 +154,7 @@ ReconstructEllipsoidFromCenters(const std::vector<BBox2, Eigen::aligned_allocato
         double v = X_img[1] / X_img[2];
         
         
-        if ((points2d[i] - Eigen::Vector2d(u, v)).norm() > 100) {
+        if ((points2d[i] - Eigen::Vector2d(u, v)).norm() > center_reprojection_threshold_px) {
             std::cerr << "Reconstruction failed: reconstructed center is too far from a detection" << std::endl;
             return {false, Ellipsoid()};
         }

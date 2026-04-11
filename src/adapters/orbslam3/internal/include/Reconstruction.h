@@ -32,7 +32,8 @@ namespace ORB_SLAM3
 std::pair<bool, Ellipsoid>
 ReconstructEllipsoidFromCenters(const std::vector<BBox2, Eigen::aligned_allocator<BBox2>>& boxes,
                                 const std::vector<Matrix34d, Eigen::aligned_allocator<Matrix34d>>& Rts, 
-                                const Eigen::Matrix3d& K);
+                                const Eigen::Matrix3d& K,
+                                double center_reprojection_threshold_px);
 
 Eigen::Vector3d TriangulatePoints2(const Eigen::Vector2d& uv1, const Eigen::Vector2d& uv2,
                                   const Matrix34d& P1, const Matrix34d& P2);

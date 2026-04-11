@@ -37,6 +37,7 @@ Model.height: 480
 
 # # Save per-frame detections in OA-SLAM JSON format (0/1 or false/true).
 # save_detections: 1
+Detector.CenterReprojectionThresholdPx: 50.0
 
 
 #--------------------------------------------------------------------------------------------

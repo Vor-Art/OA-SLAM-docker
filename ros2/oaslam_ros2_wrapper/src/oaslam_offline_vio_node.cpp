@@ -11,15 +11,10 @@
 /// images are kept in a small sliding window, and each RGB image triggers
 /// immediate frame processing.
 ///
-/// Robustness features:
-///   - Automatic depth topic fallback: when the configured depth topic is
-///     absent from the bag, the node scans for other sensor_msgs/msg/Image
-///     topics and uses the sole remaining candidate (e.g. "/" from a
-///     recording bug).  An explicit `depth_topic_override` parameter is also
-///     supported.
-///   - Null depth guard: frames without a valid depth match are skipped
-///     entirely rather than passing an empty cv::Mat to ORB-SLAM3.
-///   - Configurable max_depth_dt_sec for temporal synchronization.
+/// Runtime behavior:
+///   - Messages are streamed directly from the bag in storage order.
+///   - Frames without a usable depth image are skipped instead of sending an
+///     empty cv::Mat into ORB-SLAM3.
 ///
 /// Usage (launch):
 ///   ros2 launch oaslam_ros2_wrapper oaslam_offline_vio.launch.py
@@ -49,7 +44,6 @@
 #include <deque>
 #include <filesystem>
 #include <iostream>
-#include <limits>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -107,84 +101,6 @@ struct TimestampedDepth {
   std::shared_ptr<rosbag2_storage::SerializedBagMessage> msg;
 };
 
-/// Resolve the effective depth topic.
-///
-/// Priority:
-///   1. depth_topic_override (if non-empty and exists in bag)
-///   2. depth_topic (if it exists in the bag)
-///   3. Automatic fallback: scan all bag topics for sensor_msgs/msg/Image
-///      types that are NOT the rgb_topic.  If exactly one candidate remains,
-///      use it.
-///
-/// Returns the resolved topic name, or empty string on failure.
-std::string ResolveDepthTopic(
-    const std::string& depth_topic,
-    const std::string& depth_topic_override,
-    const std::string& rgb_topic,
-    const std::map<std::string, std::string>& topic_type_map,
-    rclcpp::Logger logger) {
-
-  // 1. Explicit override takes highest priority
-  if (!depth_topic_override.empty()) {
-    if (topic_type_map.find(depth_topic_override) != topic_type_map.end()) {
-      RCLCPP_WARN(logger,
-                  "Using depth_topic_override='%s' (overrides configured depth_topic='%s')",
-                  depth_topic_override.c_str(), depth_topic.c_str());
-      return depth_topic_override;
-    } else {
-      RCLCPP_ERROR(logger,
-                   "depth_topic_override='%s' not found in bag! Falling back to auto-detection.",
-                   depth_topic_override.c_str());
-    }
-  }
-
-  // 2. Configured depth_topic exists in bag
-  if (topic_type_map.find(depth_topic) != topic_type_map.end()) {
-    return depth_topic;
-  }
-
-  // 3. Auto-detect: find all sensor_msgs/msg/Image topics that are not the RGB topic
-  RCLCPP_WARN(logger,
-              "Configured depth_topic='%s' not found in bag. Attempting auto-detection...",
-              depth_topic.c_str());
-
-  std::vector<std::string> image_candidates;
-  for (const auto& [name, type] : topic_type_map) {
-    if (type == "sensor_msgs/msg/Image" && name != rgb_topic) {
-      image_candidates.push_back(name);
-    }
-  }
-
-  if (image_candidates.size() == 1) {
-    RCLCPP_WARN(logger,
-                "Auto-detected depth topic: '%s' (only non-RGB Image topic in bag). "
-                "To suppress this warning, set depth_topic_override='%s' in your YAML config.",
-                image_candidates[0].c_str(), image_candidates[0].c_str());
-    return image_candidates[0];
-  }
-
-  if (image_candidates.empty()) {
-    RCLCPP_ERROR(logger,
-                 "No candidate depth topics found (no sensor_msgs/msg/Image topics besides RGB).");
-  } else {
-    RCLCPP_ERROR(logger,
-                 "Multiple candidate depth topics found (%zu). Cannot auto-select. "
-                 "Please set depth_topic_override explicitly. Candidates:",
-                 image_candidates.size());
-    for (const auto& c : image_candidates) {
-      RCLCPP_ERROR(logger, "  %s", c.c_str());
-    }
-  }
-
-  // Log all available topics for debugging
-  RCLCPP_WARN(logger, "All topics in bag:");
-  for (const auto& [name, type] : topic_type_map) {
-    RCLCPP_WARN(logger, "  %s [%s]", name.c_str(), type.c_str());
-  }
-
-  return "";  // No valid depth topic found
-}
-
 }  // namespace
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,18 +125,6 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     depth_topic_ = declare_parameter<std::string>(
         "depth_topic", "/camera/aligned_depth_to_color/image_raw");
     imu_topic_ = declare_parameter<std::string>("imu_topic", "/camera/imu");
-
-    // ── Depth topic override (workaround for recording bugs) ──
-    // When the depth images were recorded under a wrong topic name (e.g. "/"
-    // due to a topic remapping bug), set this to the actual topic name in the
-    // bag.  This takes priority over depth_topic.
-    depth_topic_override_ = declare_parameter<std::string>("depth_topic_override", "");
-
-    // ── Synchronization parameters ──
-    // Maximum allowable time difference (seconds) between an RGB frame and
-    // its nearest depth frame.  Default 33ms matches 30fps.  Frames without
-    // a depth match within this window are skipped.
-    max_depth_dt_sec_ = declare_parameter<double>("max_depth_dt_sec", 0.033);
 
     // ── Camera / SLAM config ──
     camera_id_ = declare_parameter<std::string>("camera_id", "rgbd0");
@@ -247,15 +151,11 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 "  Bag:   %s\n"
                 "  RGB:   %s\n"
                 "  Depth: %s\n"
-                "  Depth override: %s\n"
-                "  IMU:   %s\n"
-                "  Max depth dt: %.3f s",
+                "  IMU:   %s",
                 common_params.use_imu ? "enabled" : "disabled",
                 bag_path_.c_str(), rgb_topic_.c_str(),
                 depth_topic_.c_str(),
-                depth_topic_override_.empty() ? "(none)" : depth_topic_override_.c_str(),
-                imu_topic_.c_str(),
-                max_depth_dt_sec_);
+                imu_topic_.c_str());
   }
 
   /// Run the full offline pipeline: open bag -> stream -> process -> save.
@@ -288,33 +188,15 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                   info.serialization_format.c_str());
     }
 
-    // ── Resolve the effective depth topic ──
-    const std::string effective_depth_topic = ResolveDepthTopic(
-        depth_topic_, depth_topic_override_, rgb_topic_,
-        topic_type_map, get_logger());
-
-    if (effective_depth_topic.empty()) {
-      RCLCPP_ERROR(get_logger(),
-                   "FATAL: Could not resolve a valid depth topic. "
-                   "Set 'depth_topic_override' parameter to the correct topic name. "
-                   "Aborting.");
-      // Graceful shutdown instead of segfault
-      session_->shutdown();
-      session_.reset();
-      return;
-    }
-
-    RCLCPP_INFO(get_logger(), "Effective depth topic: '%s'", effective_depth_topic.c_str());
-
-    // Log topic resolution summary
     RCLCPP_INFO(get_logger(),
                 "Topic resolution summary:\n"
                 "  RGB topic:   '%s' -> %s\n"
-                "  Depth topic: '%s' (configured) -> '%s' (effective)\n"
+                "  Depth topic: '%s' -> %s\n"
                 "  IMU topic:   '%s' -> %s",
                 rgb_topic_.c_str(),
                 topic_type_map.count(rgb_topic_) ? "FOUND" : "NOT FOUND",
-                depth_topic_.c_str(), effective_depth_topic.c_str(),
+                depth_topic_.c_str(),
+                topic_type_map.count(depth_topic_) ? "FOUND" : "NOT FOUND",
                 imu_topic_.c_str(),
                 topic_type_map.count(imu_topic_) ? "FOUND" : "NOT FOUND");
 
@@ -322,6 +204,13 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     if (topic_type_map.find(rgb_topic_) == topic_type_map.end()) {
       RCLCPP_ERROR(get_logger(), "RGB topic '%s' not found in bag! Aborting.",
                    rgb_topic_.c_str());
+      session_->shutdown();
+      session_.reset();
+      return;
+    }
+    if (topic_type_map.find(depth_topic_) == topic_type_map.end()) {
+      RCLCPP_ERROR(get_logger(), "Depth topic '%s' not found in bag! Aborting.",
+                   depth_topic_.c_str());
       session_->shutdown();
       session_.reset();
       return;
@@ -425,9 +314,9 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       }
 
       // ────────────────────────────────────────────────────────────────
-      // Depth message (using resolved effective topic)
+      // Depth message
       // ────────────────────────────────────────────────────────────────
-      if (topic == effective_depth_topic) {
+      if (topic == depth_topic_) {
         total_depth_in_bag++;
 
         const double ts = NanosToSeconds(bag_msg->time_stamp);
@@ -449,37 +338,28 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         const double image_timestamp = NanosToSeconds(bag_msg->time_stamp);
 
         // ── 1. Find closest depth image in the sliding window ──
-        double best_dt = std::numeric_limits<double>::max();
         size_t best_depth_idx = 0;
         bool found_depth = false;
 
         for (size_t d = 0; d < depth_window.size(); ++d) {
-          double dt = std::abs(depth_window[d].timestamp_sec - image_timestamp);
-          if (dt < best_dt) {
-            best_dt = dt;
+          const double dt = std::abs(depth_window[d].timestamp_sec - image_timestamp);
+          if (!found_depth ||
+              dt < std::abs(depth_window[best_depth_idx].timestamp_sec - image_timestamp)) {
             best_depth_idx = d;
             found_depth = true;
           }
         }
 
-        // ── 2. Null depth guard: skip frame if no valid depth match ──
-        if (!found_depth || best_dt > max_depth_dt_sec_) {
+        // ── 2. Null depth guard: skip frame if no depth is buffered ──
+        if (!found_depth) {
           total_frames_skipped_no_depth++;
           if (total_frames_skipped_no_depth <= 10) {
-            if (!found_depth) {
-              RCLCPP_WARN(get_logger(),
-                          "Frame %lu (t=%.6f): no depth candidates in buffer "
-                          "(depth_window size=%zu). Skipping frame.",
-                          static_cast<unsigned long>(frame_counter),
-                          image_timestamp,
-                          depth_window.size());
-            } else {
-              RCLCPP_WARN(get_logger(),
-                          "Frame %lu (t=%.6f): nearest depth dt=%.6fs exceeds "
-                          "max_depth_dt_sec=%.3fs. Skipping frame.",
-                          static_cast<unsigned long>(frame_counter),
-                          image_timestamp, best_dt, max_depth_dt_sec_);
-            }
+            RCLCPP_WARN(get_logger(),
+                        "Frame %lu (t=%.6f): no depth candidates in buffer "
+                        "(depth_window size=%zu). Skipping frame.",
+                        static_cast<unsigned long>(frame_counter),
+                        image_timestamp,
+                        depth_window.size());
           }
           if (total_frames_skipped_no_depth == 10) {
             RCLCPP_WARN(get_logger(),
@@ -668,7 +548,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           ? topic_type_map.at(tname) : "(unknown)";
       const char* role = "";
       if (tname == rgb_topic_) role = " [RGB]";
-      else if (tname == effective_depth_topic) role = " [DEPTH]";
+      else if (tname == depth_topic_) role = " [DEPTH]";
       else if (tname == imu_topic_) role = " [IMU]";
       else role = " [ignored]";
       RCLCPP_INFO(get_logger(), "  '%s' [%s]: %lu messages%s",
@@ -687,7 +567,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 "  Frames skipped (no depth): %lu\n"
                 "  Poses (tracked):   %lu\n"
                 "  Poses (fallback):  %lu\n"
-                "  Effective depth topic: %s\n"
+                "  Depth topic:         %s\n"
                 "  Trajectory lines:  %lu (1:1 with RGB)\n"
                 "  Wall time:         %.1f s\n"
                 "  Average FPS:       %.1f\n"
@@ -701,7 +581,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 static_cast<unsigned long>(total_frames_skipped_no_depth),
                 static_cast<unsigned long>(total_poses_obtained),
                 static_cast<unsigned long>(total_poses_interpolated),
-                effective_depth_topic.c_str(),
+                depth_topic_.c_str(),
                 static_cast<unsigned long>(total_rgb_in_bag),
                 total_sec,
                 total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0);
@@ -727,10 +607,8 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
   std::string bag_path_;
   std::string rgb_topic_;
   std::string depth_topic_;
-  std::string depth_topic_override_;
   std::string imu_topic_;
   std::string camera_id_;
-  double max_depth_dt_sec_ = 0.033;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

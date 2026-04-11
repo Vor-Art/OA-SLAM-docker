@@ -596,6 +596,7 @@ void Tracking::newParameterLoader(Settings *settings) {
     mMinFrames = 0;
     mMaxFrames = settings->fps();
     mbRGB = settings->rgb();
+    center_reprojection_threshold_px_ = settings->centerReprojectionThresholdPx();
 
     //ORB parameters
     int nFeatures = settings->nFeatures();
@@ -1179,6 +1180,17 @@ bool Tracking::ParseCamParamFile(cv::FileStorage &fSettings)
         cout << "- color order: RGB (ignored if grayscale)" << endl;
     else
         cout << "- color order: BGR (ignored if grayscale)" << endl;
+
+    cv::FileNode center_reprojection_threshold_node =
+        fSettings["Detector.CenterReprojectionThresholdPx"];
+    if(!center_reprojection_threshold_node.empty() && center_reprojection_threshold_node.isReal())
+    {
+        center_reprojection_threshold_px_ = center_reprojection_threshold_node.real();
+    }
+    else
+    {
+        center_reprojection_threshold_px_ = 100.0f;
+    }
 
     if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD)
     {
@@ -4547,6 +4559,13 @@ void Tracking::ChangeCalibration(const string &strSettingPath)
     DistCoef.copyTo(mDistCoef);
 
     mbf = fSettings["Camera.bf"];
+    center_reprojection_threshold_px_ = 100.0f;
+    cv::FileNode center_reprojection_threshold_node =
+        fSettings["Detector.CenterReprojectionThresholdPx"];
+    if(!center_reprojection_threshold_node.empty() && center_reprojection_threshold_node.isReal())
+    {
+        center_reprojection_threshold_px_ = center_reprojection_threshold_node.real();
+    }
 
     Frame::mbInitialComputations = true;
 }
