@@ -32,6 +32,17 @@ using namespace std;
 
 namespace ORB_SLAM3 {
 
+    bool Settings::usesSingleCameraSchema() const {
+        return sensor_ != System::STEREO && sensor_ != System::IMU_STEREO;
+    }
+
+    std::string Settings::primaryCameraKey(const std::string& suffix) const {
+        if(usesSingleCameraSchema()){
+            return "Camera." + suffix;
+        }
+        return "Camera1." + suffix;
+    }
+
     template<>
     float Settings::readParameter<float>(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required){
         cv::FileNode node = fSettings[name];
@@ -192,10 +203,14 @@ namespace ORB_SLAM3 {
             cameraType_ = PinHole;
 
             //Read intrinsic parameters
-            float fx = readParameter<float>(fSettings,"Camera1.fx",found);
-            float fy = readParameter<float>(fSettings,"Camera1.fy",found);
-            float cx = readParameter<float>(fSettings,"Camera1.cx",found);
-            float cy = readParameter<float>(fSettings,"Camera1.cy",found);
+            float fx = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("fx"), "Camera1.fx", found);
+            float fy = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("fy"), "Camera1.fy", found);
+            float cx = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("cx"), "Camera1.cx", found);
+            float cy = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("cy"), "Camera1.cy", found);
 
             vCalibration = {fx, fy, cx, cy};
 
@@ -203,20 +218,27 @@ namespace ORB_SLAM3 {
             originalCalib1_ = new Pinhole(vCalibration);
 
             //Check if it is a distorted PinHole
-            readParameter<float>(fSettings,"Camera1.k1",found,false);
+            readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("k1"), "Camera1.k1", found, false);
             if(found){
-                readParameter<float>(fSettings,"Camera1.k3",found,false);
+                readParameterWithFallback<float>(
+                    fSettings, primaryCameraKey("k3"), "Camera1.k3", found, false);
                 if(found){
                     vPinHoleDistorsion1_.resize(5);
-                    vPinHoleDistorsion1_[4] = readParameter<float>(fSettings,"Camera1.k3",found);
+                    vPinHoleDistorsion1_[4] = readParameterWithFallback<float>(
+                        fSettings, primaryCameraKey("k3"), "Camera1.k3", found);
                 }
                 else{
                     vPinHoleDistorsion1_.resize(4);
                 }
-                vPinHoleDistorsion1_[0] = readParameter<float>(fSettings,"Camera1.k1",found);
-                vPinHoleDistorsion1_[1] = readParameter<float>(fSettings,"Camera1.k2",found);
-                vPinHoleDistorsion1_[2] = readParameter<float>(fSettings,"Camera1.p1",found);
-                vPinHoleDistorsion1_[3] = readParameter<float>(fSettings,"Camera1.p2",found);
+                vPinHoleDistorsion1_[0] = readParameterWithFallback<float>(
+                    fSettings, primaryCameraKey("k1"), "Camera1.k1", found);
+                vPinHoleDistorsion1_[1] = readParameterWithFallback<float>(
+                    fSettings, primaryCameraKey("k2"), "Camera1.k2", found);
+                vPinHoleDistorsion1_[2] = readParameterWithFallback<float>(
+                    fSettings, primaryCameraKey("p1"), "Camera1.p1", found);
+                vPinHoleDistorsion1_[3] = readParameterWithFallback<float>(
+                    fSettings, primaryCameraKey("p2"), "Camera1.p2", found);
             }
 
             //Check if we need to correct distortion from the images
@@ -228,10 +250,14 @@ namespace ORB_SLAM3 {
             cameraType_ = Rectified;
 
             //Read intrinsic parameters
-            float fx = readParameter<float>(fSettings,"Camera1.fx",found);
-            float fy = readParameter<float>(fSettings,"Camera1.fy",found);
-            float cx = readParameter<float>(fSettings,"Camera1.cx",found);
-            float cy = readParameter<float>(fSettings,"Camera1.cy",found);
+            float fx = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("fx"), "Camera1.fx", found);
+            float fy = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("fy"), "Camera1.fy", found);
+            float cx = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("cx"), "Camera1.cx", found);
+            float cy = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("cy"), "Camera1.cy", found);
 
             vCalibration = {fx, fy, cx, cy};
 
@@ -244,15 +270,23 @@ namespace ORB_SLAM3 {
             cameraType_ = KannalaBrandt;
 
             //Read intrinsic parameters
-            float fx = readParameter<float>(fSettings,"Camera1.fx",found);
-            float fy = readParameter<float>(fSettings,"Camera1.fy",found);
-            float cx = readParameter<float>(fSettings,"Camera1.cx",found);
-            float cy = readParameter<float>(fSettings,"Camera1.cy",found);
+            float fx = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("fx"), "Camera1.fx", found);
+            float fy = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("fy"), "Camera1.fy", found);
+            float cx = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("cx"), "Camera1.cx", found);
+            float cy = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("cy"), "Camera1.cy", found);
 
-            float k0 = readParameter<float>(fSettings,"Camera1.k1",found);
-            float k1 = readParameter<float>(fSettings,"Camera1.k2",found);
-            float k2 = readParameter<float>(fSettings,"Camera1.k3",found);
-            float k3 = readParameter<float>(fSettings,"Camera1.k4",found);
+            float k0 = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("k1"), "Camera1.k1", found);
+            float k1 = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("k2"), "Camera1.k2", found);
+            float k2 = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("k3"), "Camera1.k3", found);
+            float k3 = readParameterWithFallback<float>(
+                fSettings, primaryCameraKey("k4"), "Camera1.k4", found);
 
             vCalibration = {fx,fy,cx,cy,k0,k1,k2,k3};
 
@@ -419,7 +453,8 @@ namespace ORB_SLAM3 {
         accWalk_ = readParameter<float>(fSettings,"IMU.AccWalk",found);
         imuFrequency_ = readParameter<float>(fSettings,"IMU.Frequency",found);
 
-        cv::Mat cvTbc = readParameter<cv::Mat>(fSettings,"IMU.T_b_c1",found);
+        cv::Mat cvTbc = readParameterWithFallback<cv::Mat>(
+            fSettings,"IMU.T_b_c","IMU.T_b_c1",found);
         Tbc_ = Converter::toSophus(cvTbc);
 
         readParameter<int>(fSettings,"IMU.InsertKFsWhenLost",found,false);
@@ -434,9 +469,12 @@ namespace ORB_SLAM3 {
     void Settings::readRGBD(cv::FileStorage& fSettings) {
         bool found;
 
-        depthMapFactor_ = readParameter<float>(fSettings,"RGBD.DepthMapFactor",found);
-        thDepth_ = readParameter<float>(fSettings,"Stereo.ThDepth",found);
-        b_ = readParameter<float>(fSettings,"Stereo.b",found);
+        depthMapFactor_ = readParameterWithFallback<float>(
+            fSettings,"Depth.MapFactor","RGBD.DepthMapFactor",found);
+        thDepth_ = readParameterWithFallback<float>(
+            fSettings,"Depth.ThDepth","Stereo.ThDepth",found);
+        b_ = readParameterWithFallback<float>(
+            fSettings,"Depth.Baseline","Stereo.b",found);
         bf_ = b_ * calibration1_->getParameter(0);
     }
 

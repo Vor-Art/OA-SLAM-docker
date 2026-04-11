@@ -2,23 +2,32 @@
 ---
 
 #--------------------------------------------------------------------------------------------
-# Camera Parameters. Adjust them!
+# System Parameters
 #--------------------------------------------------------------------------------------------
+File.version: "1.0"
+Camera.type: "PinHole"
 
-# Camera calibration and distortion parameters (OpenCV)
+#--------------------------------------------------------------------------------------------
+# Camera Parameters: Generic RGB pinhole camera
+#--------------------------------------------------------------------------------------------
+# This profile keeps the non-IMU OA-SLAM camera settings in the same layout as
+# the RGB-D + IMU profile below.
 Camera.fx: 605.642333984375
 Camera.fy: 605.6187133789062
 Camera.cx: 325.03326416015625
 Camera.cy: 237.22653198242188
 
-Camera.k1: 0
-Camera.k2: 0
-Camera.p1: 0
-Camera.p2: 0
-Camera.k3: 0
+Camera.k1: 0.0
+Camera.k2: 0.0
+Camera.k3: 0.0
+Camera.k4: 0.0
+Camera.p1: 0.0
+Camera.p2: 0.0
 
 Camera.width: 640
 Camera.height: 480
+Camera.fps: 60
+Camera.RGB: 1  # Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
 
 #--------------------------------------------------------------------------------------------
 # Detector Parameters
@@ -26,37 +35,20 @@ Camera.height: 480
 Model.width: 640
 Model.height: 480
 
-# Camera frames per second
-Camera.fps: 60
+# # Save per-frame detections in OA-SLAM JSON format (0/1 or false/true).
+# save_detections: 1
 
-# Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
-Camera.RGB: 1
-
-# Save per-frame detections in OA-SLAM JSON format (0/1 or false/true)
-save_detections: 1
-
-# Force deterministic replay by using a fixed seed and waiting for SLAM workers
-# to finish each frame before advancing to the next one.
-deterministic_mode: 1
-deterministic_seed: 0
 
 #--------------------------------------------------------------------------------------------
 # ORB Parameters
 #--------------------------------------------------------------------------------------------
-
-# ORB Extractor: Number of features per image
 ORBextractor.nFeatures: 1500
-
-# ORB Extractor: Scale factor between levels in the scale pyramid
 ORBextractor.scaleFactor: 1.2
-
-# ORB Extractor: Number of levels in the scale pyramid
 ORBextractor.nLevels: 8
 
-# ORB Extractor: Fast threshold
-# Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
-# Firstly we impose iniThFAST. If no corners are detected we impose a lower value minThFAST
-# You can lower these values if your images have low contrast
+# Image is divided into a grid. At each cell FAST corners are extracted with a
+# minimum response threshold. If no corners are found with iniThFAST, the lower
+# minThFAST threshold is used.
 ORBextractor.iniThFAST: 20
 ORBextractor.minThFAST: 7
 
@@ -66,10 +58,10 @@ ORBextractor.minThFAST: 7
 Viewer.KeyFrameSize: 0.02
 Viewer.KeyFrameLineWidth: 0.8
 Viewer.GraphLineWidth: 0.6
-Viewer.PointSize: 2
+Viewer.PointSize: 2.0
 Viewer.CameraSize: 0.04
-Viewer.CameraLineWidth: 2
-Viewer.ViewpointX: 0
+Viewer.CameraLineWidth: 2.0
+Viewer.ViewpointX: 0.0
 Viewer.ViewpointY: -0.7
 Viewer.ViewpointZ: -1.8
-Viewer.ViewpointF: 500
+Viewer.ViewpointF: 500.0

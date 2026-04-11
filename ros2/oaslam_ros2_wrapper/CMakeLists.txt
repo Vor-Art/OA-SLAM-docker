@@ -21,6 +21,20 @@ find_package(rosbag2_storage REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 
+add_library(oaslam_ros2_wrapper_common STATIC
+  src/session_config_utils.cpp
+)
+target_include_directories(oaslam_ros2_wrapper_common PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(oaslam_ros2_wrapper_common
+  Eigen3::Eigen
+  oaslam::oaslam_sdk
+)
+ament_target_dependencies(oaslam_ros2_wrapper_common
+  rclcpp
+)
+
 add_executable(oaslam_vio_node
   src/oaslam_vio_node.cpp
 )
@@ -28,6 +42,7 @@ add_executable(oaslam_vio_node
 target_link_libraries(oaslam_vio_node
   Eigen3::Eigen
   oaslam::oaslam_sdk
+  oaslam_ros2_wrapper_common
 )
 
 ament_target_dependencies(oaslam_vio_node
@@ -46,6 +61,7 @@ add_executable(oaslam_offline_vio_node
 target_link_libraries(oaslam_offline_vio_node
   Eigen3::Eigen
   oaslam::oaslam_sdk
+  oaslam_ros2_wrapper_common
 )
 
 ament_target_dependencies(oaslam_offline_vio_node

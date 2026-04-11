@@ -5,120 +5,85 @@
 # System Parameters
 #--------------------------------------------------------------------------------------------
 File.version: "1.0"
-
-#--------------------------------------------------------------------------------------------
-# Camera1 Parameters: Intel RealSense D435i RGB Camera (PinHole model)
-# Intrinsics match slam_camera.yaml; format follows ORB-SLAM3 Camera1.* convention.
-#--------------------------------------------------------------------------------------------
-
 Camera.type: "PinHole"
 
-# Intrinsic parameters (from factory calibration)
-Camera1.fx: 605.642333984375
-Camera1.fy: 605.6187133789062
-Camera1.cx: 325.03326416015625
-Camera1.cy: 237.22653198242188
+#--------------------------------------------------------------------------------------------
+# Camera Parameters: Intel RealSense D435i RGB-D + IMU
+#--------------------------------------------------------------------------------------------
+# Single-camera configs use the Camera / Depth / IMU section names directly.
+Camera.fx: 605.642333984375
+Camera.fy: 605.6187133789062
+Camera.cx: 325.03326416015625
+Camera.cy: 237.22653198242188
 
-# Distortion coefficients (D435i has negligible distortion after rectification)
-Camera1.k1: 0.0
-Camera1.k2: 0.0
-Camera1.k3: 0.0
-Camera1.k4: 0.0
-Camera1.p1: 0.0
-Camera1.p2: 0.0
+Camera.k1: 0.0
+Camera.k2: 0.0
+Camera.k3: 0.0
+Camera.k4: 0.0
+Camera.p1: 0.0
+Camera.p2: 0.0
 
-# Image dimensions
 Camera.width: 640
 Camera.height: 480
-
-# Frames per second (D435i typical for RGBD mode)
 Camera.fps: 60
-
-# Color order (0: BGR, 1: RGB)
-Camera.RGB: 1
+Camera.RGB: 1  # Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
 
 #--------------------------------------------------------------------------------------------
-# RGBD Parameters
-# D435i depth stream outputs depth in millimeters; ORB-SLAM3 expects meters.
+# Detector Parameters
 #--------------------------------------------------------------------------------------------
+Model.width: 640
+Model.height: 480
 
-# Depth map scale factor: depth_in_meters = depth_raw / DepthMapFactor
-RGBD.DepthMapFactor: 1000.0
+# # Save per-frame detections in OA-SLAM JSON format (0/1 or false/true).
+# save_detections: 1
 
-# Close/far threshold. Baseline times this value gives the threshold for
-# classifying points as close or far. Far points are only inserted from
-# stereo/RGBD, close points are inserted from monocular observations too.
-Stereo.ThDepth: 40.0
-Stereo.b: 0.05
+#--------------------------------------------------------------------------------------------
+# Depth Parameters
+#--------------------------------------------------------------------------------------------
+# D435i depth is reported in millimeters. ORB-SLAM3 expects meters.
+Depth.MapFactor: 1000.0
 
-# Stereo baseline (in meters) times fx. Used internally by ORB-SLAM3 for
-# depth-to-disparity conversion. For D435i: ~0.05 m baseline * 969 ≈ 48.45
+# Threshold for classifying close and far RGB-D points.
+Depth.ThDepth: 40.0
+Depth.Baseline: 0.05
+
+# Stereo baseline (meters) multiplied by fx. Used internally for RGB-D depth
+# to disparity conversion.
 Camera.bf: 48.45
 
 #--------------------------------------------------------------------------------------------
-# IMU Parameters: Bosch BMI055 (integrated in Intel RealSense D435i)
-#
-# Noise and random-walk values are typical datasheet / Allan-variance estimates.
-# For production use, run Allan variance analysis on your specific unit.
+# IMU Parameters: Bosch BMI055
 #--------------------------------------------------------------------------------------------
-
-# Gyroscope noise density (rad/s/sqrt(Hz))
 IMU.NoiseGyro: 1.7e-4
-
-# Accelerometer noise density (m/s^2/sqrt(Hz))
-IMU.NoiseAcc: 2.0000e-3
-
-# Gyroscope random walk (rad/s^2/sqrt(Hz))
+IMU.NoiseAcc: 2.0e-3
 IMU.GyroWalk: 1.9393e-5
-
-# Accelerometer random walk (m/s^3/sqrt(Hz))
-IMU.AccWalk: 3.0000e-3
-
-# IMU sampling frequency (Hz)
+IMU.AccWalk: 3.0e-3
 IMU.Frequency: 200.0
-
-# Insert keyframes when tracking is lost to aid IMU-based recovery
 IMU.InsertKFsWhenLost: 1
-
-# Enable fast IMU initialization (skip strict acceleration-change check).
-# Recommended for RGBD mode where scale is already observable from depth,
-# and for robots with smooth motion profiles that may not produce large
-# acceleration changes between consecutive frames.
 IMU.fastInit: false
 
 #--------------------------------------------------------------------------------------------
-# IMU-Camera Extrinsic: Transformation from IMU body frame to Camera1 (RGB)
-#
-# This is the approximate factory calibration for the D435i.
-# NOTE: For production use, this transform should be calibrated with Kalibr
-# (or similar tool) using your specific camera unit for best accuracy.
+# IMU Extrinsics
 #--------------------------------------------------------------------------------------------
-IMU.T_b_c1: !!opencv-matrix
+IMU.T_b_c: !!opencv-matrix
   rows: 4
   cols: 4
   dt: f
-  data: [ 1.0,  0.0,  0.0,  0.0115,
-          0.0,  1.0,  0.0, -0.0055,
-          0.0,  0.0,  1.0, -0.0117,
-          0.0,  0.0,  0.0,  1.0]
+  data: [ 1.0, 0.0, 0.0, 0.0115,
+          0.0, 1.0, 0.0, -0.0055,
+          0.0, 0.0, 1.0, -0.0117,
+          0.0, 0.0, 0.0, 1.0 ]
 
 #--------------------------------------------------------------------------------------------
 # ORB Parameters
 #--------------------------------------------------------------------------------------------
-
-# Number of features per image
 ORBextractor.nFeatures: 1500
-
-# Scale factor between levels in the scale pyramid
 ORBextractor.scaleFactor: 1.2
-
-# Number of levels in the scale pyramid
 ORBextractor.nLevels: 8
 
-# Fast threshold
-# Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
-# Firstly we impose iniThFAST. If no corners are detected we impose a lower value minThFAST.
-# You can lower these values if your images have low contrast.
+# Image is divided into a grid. At each cell FAST corners are extracted with a
+# minimum response threshold. If no corners are found with iniThFAST, the lower
+# minThFAST threshold is used.
 ORBextractor.iniThFAST: 20
 ORBextractor.minThFAST: 7
 

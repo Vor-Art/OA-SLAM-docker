@@ -156,6 +156,23 @@ namespace ORB_SLAM3 {
 
         void precomputeRectificationMaps();
 
+        bool usesSingleCameraSchema() const;
+
+        std::string primaryCameraKey(const std::string& suffix) const;
+
+        template<typename T>
+        T readParameterWithFallback(cv::FileStorage& fSettings,
+                                    const std::string& primary,
+                                    const std::string& fallback,
+                                    bool& found,
+                                    const bool required = true){
+            cv::FileNode primaryNode = fSettings[primary];
+            if(!primaryNode.empty()){
+                return readParameter<T>(fSettings, primary, found, required);
+            }
+            return readParameter<T>(fSettings, fallback, found, required);
+        }
+
         int sensor_;
         CameraType cameraType_;     //Camera type
 

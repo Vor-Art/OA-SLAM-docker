@@ -48,8 +48,6 @@
 #include <chrono>
 #include <deque>
 #include <filesystem>
-#include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -61,69 +59,12 @@
 #include "oaslam/app/module_factories.h"
 #include "oaslam/app/slam_session.h"
 #include "oaslam/core/frame_packet.h"
+#include "session_config_utils.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 namespace {
-
-bool IsEmptyPath(const std::string& value) {
-  return value.empty() || value == "none" || value == "null";
-}
-
-void EnsureFileExists(const std::string& path, const std::string& label) {
-  if (!std::filesystem::exists(path)) {
-    throw std::runtime_error(label + " does not exist: " + path);
-  }
-}
-
-std::vector<int> LoadIgnoredCategories(const std::string& path) {
-  std::vector<int> categories;
-  if (IsEmptyPath(path)) return categories;
-  EnsureFileExists(path, "Ignored categories file");
-  std::ifstream input(path);
-  std::string line;
-  while (std::getline(input, line)) {
-    if (line.empty() || line.front() == '#') continue;
-    std::istringstream stream(line);
-    int category = 0;
-    if (stream >> category) categories.push_back(category);
-  }
-  return categories;
-}
-
-oaslam::ObservationSourceKind ParseObservationMode(const std::string& value) {
-  if (value == "none") return oaslam::ObservationSourceKind::None;
-  if (value == "onnx") return oaslam::ObservationSourceKind::Onnx;
-  if (value == "file") return oaslam::ObservationSourceKind::File;
-  throw std::runtime_error("observation_mode must be 'none', 'onnx', or 'file'");
-}
-
-oaslam::RelocalizationMode ParseRelocalizationMode(const std::string& value) {
-  if (value == "objects") return oaslam::RelocalizationMode::Objects;
-  if (value == "points_and_objects" || value == "points+objects")
-    return oaslam::RelocalizationMode::PointsAndObjects;
-  if (value == "points") return oaslam::RelocalizationMode::Points;
-  throw std::runtime_error(
-      "relocalization_mode must be 'points', 'objects', or 'points_and_objects'");
-}
-
-/// Write a single pose line in TUM format: timestamp tx ty tz qx qy qz qw
-void WriteTumPoseLine(std::ofstream& out, double timestamp,
-                      const oaslam::Transform4d& transform) {
-  Eigen::Matrix3d rotation;
-  for (int row = 0; row < 3; ++row)
-    for (int col = 0; col < 3; ++col)
-      rotation(row, col) = transform(row, col);
-
-  Eigen::Quaterniond q(rotation);
-  q.normalize();
-
-  out << std::fixed << std::setprecision(6) << timestamp << " "
-      << std::setprecision(9)
-      << transform(0, 3) << " " << transform(1, 3) << " " << transform(2, 3) << " "
-      << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
-}
 
 constexpr int kMaxKeyframeQueueDepth = 2;
 constexpr int kBackpressureSleepUs = 50;
@@ -283,72 +224,20 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
 
     // ── Camera / SLAM config ──
     camera_id_ = declare_parameter<std::string>("camera_id", "rgbd0");
-    const std::string output_folder = declare_parameter<std::string>("output_folder", "");
-
-    const std::string vocabulary_file =
-        declare_parameter<std::string>("vocabulary_file", "/app/Vocabulary/ORBvoc.txt");
-    const std::string camera_settings_file =
-        declare_parameter<std::string>(
-            "camera_settings_file",
-            "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/d435i_imu_rgbd.yaml");
-    const std::string observation_mode =
-        declare_parameter<std::string>("observation_mode", "none");
-    const std::string detection_model_path =
-        declare_parameter<std::string>("detection_model_path", "");
-    const std::string detection_file_path =
-        declare_parameter<std::string>("detection_file_path", "");
-    const std::string ignored_categories_file =
-        declare_parameter<std::string>("ignored_categories_file", "");
-    const std::string relocalization_mode =
-        declare_parameter<std::string>("relocalization_mode", "points");
-    const bool use_viewer = declare_parameter<bool>("use_viewer", false);
-    const bool use_imu = declare_parameter<bool>("use_imu", true);
-
-    EnsureFileExists(vocabulary_file, "Vocabulary file");
-    EnsureFileExists(camera_settings_file, "Camera settings file");
+    const auto common_params =
+        oaslam_ros2_wrapper::DeclareCommonSessionParameters(*this);
 
     // ── Open TUM trajectory file ──
-    if (!IsEmptyPath(output_folder)) {
-      std::filesystem::create_directories(output_folder);
-      const std::string tum_path = output_folder + "/CameraTrajectory.txt";
-      tum_file_.open(tum_path, std::ios::out | std::ios::trunc);
-      if (!tum_file_.is_open()) {
-        throw std::runtime_error("Failed to open TUM trajectory file: " + tum_path);
-      }
-      tum_file_ << "# TUM trajectory format: timestamp tx ty tz qx qy qz qw\n";
+    const std::string tum_path =
+        oaslam_ros2_wrapper::OpenTumTrajectoryFile(
+            tum_file_, common_params.output_folder);
+    if (!tum_path.empty()) {
       RCLCPP_INFO(get_logger(), "Saving trajectory (TUM) to: %s", tum_path.c_str());
     }
 
     // ── Configure SLAM session ──
-    oaslam::SessionConfig cfg;
-    cfg.slam_backend.vocabulary_file = vocabulary_file;
-    cfg.slam_backend.camera_settings_file = camera_settings_file;
-    cfg.slam_backend.use_viewer = use_viewer;
-    cfg.slam_backend.use_ar_viewer = false;
-    cfg.slam_backend.use_objects_in_local_ba = 0;
-    cfg.slam_backend.relocalization_mode = ParseRelocalizationMode(relocalization_mode);
-    cfg.slam_backend.use_imu = use_imu;
-    cfg.visualizer.enabled = use_viewer;
-    cfg.agent_gateway.enabled = false;
-
-    cfg.observation_source.kind = ParseObservationMode(observation_mode);
-    cfg.observation_source.ignored_categories =
-        LoadIgnoredCategories(ignored_categories_file);
-    const oaslam::ModelInputSize model_input_size = oaslam::LoadModelInputSize(camera_settings_file);
-    cfg.observation_source.model_input_width = model_input_size.width;
-    cfg.observation_source.model_input_height = model_input_size.height;
-
-    if (cfg.observation_source.kind == oaslam::ObservationSourceKind::Onnx) {
-      if (IsEmptyPath(detection_model_path))
-        throw std::runtime_error("detection_model_path required for 'onnx' mode");
-      EnsureFileExists(detection_model_path, "ONNX detection model");
-      cfg.observation_source.source_path = detection_model_path;
-    } else if (cfg.observation_source.kind == oaslam::ObservationSourceKind::File) {
-      if (IsEmptyPath(detection_file_path))
-        throw std::runtime_error("detection_file_path required for 'file' mode");
-      EnsureFileExists(detection_file_path, "Detection file");
-      cfg.observation_source.source_path = detection_file_path;
-    }
+    const oaslam::SessionConfig cfg =
+        oaslam_ros2_wrapper::BuildSessionConfig(common_params);
 
     session_ = std::make_unique<oaslam::SlamSession>(
         cfg, oaslam::CreateDefaultModules(cfg));
@@ -361,7 +250,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                 "  Depth override: %s\n"
                 "  IMU:   %s\n"
                 "  Max depth dt: %.3f s",
-                use_imu ? "enabled" : "disabled",
+                common_params.use_imu ? "enabled" : "disabled",
                 bag_path_.c_str(), rgb_topic_.c_str(),
                 depth_topic_.c_str(),
                 depth_topic_override_.empty() ? "(none)" : depth_topic_override_.c_str(),
@@ -600,7 +489,8 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           // Write fallback trajectory line for skipped frame
           total_poses_interpolated++;
           if (tum_file_.is_open()) {
-            WriteTumPoseLine(tum_file_, image_timestamp, last_known_pose);
+            oaslam_ros2_wrapper::WriteTumPoseLine(
+                tum_file_, image_timestamp, last_known_pose);
           }
           frame_counter++;
           continue;  // SKIP — do NOT pass null depth to SLAM
@@ -616,7 +506,8 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                       static_cast<unsigned long>(frame_counter), exc.what());
           total_poses_interpolated++;
           if (tum_file_.is_open()) {
-            WriteTumPoseLine(tum_file_, image_timestamp, last_known_pose);
+            oaslam_ros2_wrapper::WriteTumPoseLine(
+                tum_file_, image_timestamp, last_known_pose);
           }
           frame_counter++;
           continue;
@@ -661,7 +552,8 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           total_frames_skipped_no_depth++;
           total_poses_interpolated++;
           if (tum_file_.is_open()) {
-            WriteTumPoseLine(tum_file_, image_timestamp, last_known_pose);
+            oaslam_ros2_wrapper::WriteTumPoseLine(
+                tum_file_, image_timestamp, last_known_pose);
           }
           frame_counter++;
           continue;  // SKIP — do NOT pass invalid depth to SLAM
@@ -734,7 +626,8 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         }
 
         if (tum_file_.is_open()) {
-          WriteTumPoseLine(tum_file_, image_timestamp, last_known_pose);
+          oaslam_ros2_wrapper::WriteTumPoseLine(
+              tum_file_, image_timestamp, last_known_pose);
         }
 
         // ── 13. Progress logging ──
