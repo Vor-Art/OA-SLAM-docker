@@ -2,6 +2,8 @@
 
 #include <Eigen/Geometry>
 
+#include <chrono>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -15,6 +17,27 @@ namespace {
 constexpr char kDefaultVocabularyFile[] = "/opt/OA-SLAM/Vocabulary/ORBvoc.txt";
 constexpr char kDefaultCameraSettingsFile[] =
     "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/d435i_imu_rgbd.yaml";
+
+std::string FormatCurrentLocalTimestamp() {
+  const auto now = std::chrono::system_clock::now();
+  const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+
+  std::tm local_time{};
+  localtime_r(&now_time, &local_time);
+
+  std::ostringstream stream;
+  stream << std::put_time(&local_time, "%Y%m%d_%H%M%S");
+  return stream.str();
+}
+
+std::string ResolveOutputFolder(const std::string& output_folder) {
+  if (IsEmptyPath(output_folder)) {
+    return "";
+  }
+
+  return (std::filesystem::path(output_folder) / FormatCurrentLocalTimestamp())
+      .string();
+}
 
 void EnsureFileExists(const std::string& path, const std::string& label) {
   if (!std::filesystem::exists(path)) {
@@ -81,7 +104,8 @@ bool IsEmptyPath(const std::string& value) {
 
 CommonSessionParams DeclareCommonSessionParameters(rclcpp::Node& node) {
   CommonSessionParams params;
-  params.output_folder = node.declare_parameter<std::string>("output_folder", "");
+  params.output_folder = ResolveOutputFolder(
+      node.declare_parameter<std::string>("output_folder", ""));
   params.vocabulary_file =
       node.declare_parameter<std::string>("vocabulary_file", kDefaultVocabularyFile);
   params.camera_settings_file = node.declare_parameter<std::string>(
