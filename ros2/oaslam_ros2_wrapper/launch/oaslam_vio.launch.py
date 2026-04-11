@@ -9,7 +9,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     package_share = Path(get_package_share_directory("oaslam_ros2_wrapper"))
-    default_params = package_share / "config" / "wrapper_vio.yaml"
+    default_params = package_share / "config" / "online_vio.yaml"
 
     return LaunchDescription(
         [

@@ -22,7 +22,7 @@ mkdir -p "${HOME}" "${ROS_HOME}"
 export LD_LIBRARY_PATH="${OASLAM_CPP_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 
 LAUNCH_FILE="${OASLAM_ROS2_LAUNCH_FILE:-oaslam_vio.launch.py}"
-PARAMS_FILE="${OASLAM_ROS2_PARAMS_FILE:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper_vio.yaml}"
+PARAMS_FILE="${OASLAM_ROS2_PARAMS_FILE:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/online_vio.yaml}"
 USE_SIM_TIME="${USE_SIM_TIME:-false}"
 
 exec ros2 launch oaslam_ros2_wrapper "${LAUNCH_FILE}" \

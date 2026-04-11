@@ -186,7 +186,9 @@ class OaSlamVioNode : public rclcpp::Node {
     const std::string vocabulary_file =
         declare_parameter<std::string>("vocabulary_file", "/app/Vocabulary/ORBvoc.txt");
     const std::string camera_settings_file =
-        declare_parameter<std::string>("camera_settings_file", "/app/config/d435i_imu_rgbd.yaml");
+        declare_parameter<std::string>(
+            "camera_settings_file",
+            "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/d435i_imu_rgbd.yaml");
     const std::string observation_mode =
         declare_parameter<std::string>("observation_mode", "none");
     const std::string detection_model_path =

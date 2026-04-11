@@ -30,7 +30,7 @@ oaslam_offline_vio_node:
 
     # ── SLAM Backend ──
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
-    camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/d435i_imu_rgbd.yaml"
+    camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/d435i_imu_rgbd.yaml"
     use_viewer: true
     use_imu: false
 

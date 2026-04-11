@@ -121,7 +121,7 @@ run_ros2() {
 }
 
 run_ros2_online() {
-  local params_file="${1:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper_vio.yaml}"
+  local params_file="${1:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/online_vio.yaml}"
   run_ros2 "oaslam_vio.launch.py" "$params_file"
 }
 
@@ -211,7 +211,7 @@ case "${1:-help}" in
     echo "  $0 build"
     echo "  $0 start"
     echo "  $0 rebuild"
-    echo "  $0 run-online [params]  # default /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper_vio.yaml"
+    echo "  $0 run-online [params]  # default /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/online_vio.yaml"
     echo "  $0 run-offline [params]  # default /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/offline_vio.yaml"
     ;;
 esac
