@@ -1,7 +1,7 @@
 """Launch file for the offline VIO node.
 
 Reads a ROS2 bag (sqlite3) directly and processes frames sequentially
-through the OA-SLAM pipeline.  No pub/sub — behaves like a standalone binary.
+through the OA-SLAM pipeline without pub/sub replay.
 
 All parameters (bag_path, output_folder, topics, SLAM settings, etc.) are
 read from the YAML params file.  Only the params file path and use_sim_time

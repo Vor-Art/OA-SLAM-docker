@@ -351,9 +351,6 @@ target_link_libraries(oaslam_sdk INTERFACE
   oaslam_app
 )
 
-add_executable(oa-slam examples/oa-slam.cc)
-target_link_libraries(oa-slam PRIVATE oaslam_sdk)
-
 # ---------------------------------------------------------------------------
 # Installation
 # ---------------------------------------------------------------------------
@@ -371,7 +368,6 @@ set(_OASLAM_INSTALL_TARGETS
   oaslam_adapter_agent
   oaslam_app
   oaslam_sdk
-  oa-slam
 )
 
 install(TARGETS ${_OASLAM_INSTALL_TARGETS}

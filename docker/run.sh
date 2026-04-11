@@ -92,7 +92,7 @@ build_ros2() {
     export CMAKE_PREFIX_PATH="${OASLAM_CPP_INSTALL_PREFIX}:${CMAKE_PREFIX_PATH:-}"
     export LD_LIBRARY_PATH="${OASLAM_CPP_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 
-    if [[ ! -x "${OASLAM_CPP_INSTALL_PREFIX}/bin/oa-slam" ]]; then
+    if [[ ! -f "${OASLAM_CPP_INSTALL_PREFIX}/lib/cmake/oaslam/oaslamConfig.cmake" ]]; then
       echo "OA-SLAM C++ artifacts are missing. Run ./docker/run.sh rebuild-cpp first." >&2
       exit 1
     fi
@@ -109,14 +109,6 @@ build_ros2() {
   '
 }
 
-run_mapping() {
-  local args=(python3 /opt/OA-SLAM/docker/oa_slam_start.py)
-  if [[ -n "${1:-}" ]]; then
-    args+=("$1")
-  fi
-  docker exec -it "$SERVICE" "${args[@]}"
-}
-
 run_ros2() {
   local exec_args=(-it)
   if [[ -n "${1:-}" ]]; then
@@ -125,7 +117,17 @@ run_ros2() {
   if [[ -n "${2:-}" ]]; then
     exec_args+=(-e "OASLAM_ROS2_PARAMS_FILE=$2")
   fi
-  docker exec "${exec_args[@]}" "$SERVICE" /bin/bash /opt/OA-SLAM/docker/ros2_wrapper_start.sh
+  docker exec "${exec_args[@]}" "$SERVICE" /bin/bash /opt/OA-SLAM/docker/ros2_entrypoint.sh
+}
+
+run_ros2_online() {
+  local params_file="${1:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper_vio.yaml}"
+  run_ros2 "oaslam_vio.launch.py" "$params_file"
+}
+
+run_ros2_offline() {
+  local params_file="${1:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/offline_vio.yaml}"
+  run_ros2 "oaslam_offline_vio.launch.py" "$params_file"
 }
 
 status() {
@@ -140,7 +142,7 @@ require_running() {
 }
 
 require_cpp_built() {
-  if ! docker exec "$SERVICE" test -x /opt/oaslam_artifacts/cpp/install/bin/oa-slam; then
+  if ! docker exec "$SERVICE" test -f /opt/oaslam_artifacts/cpp/install/lib/cmake/oaslam/oaslamConfig.cmake; then
     echo "OA-SLAM C++ artifacts are missing. Build them with: ./docker/run.sh rebuild-cpp"
     exit 1
   fi
@@ -184,15 +186,17 @@ case "${1:-help}" in
     require_running
     build_ros2
     ;;
-  run)
+  run-online)
     require_running
     require_cpp_built
-    run_mapping "${2:-}"
-    ;;
-  run-ros2)
-    require_running
     require_ros2_built
-    run_ros2 "${2:-}" "${3:-}"
+    run_ros2_online "${2:-}"
+    ;;
+  run-offline)
+    require_running
+    require_cpp_built
+    require_ros2_built
+    run_ros2_offline "${2:-}"
     ;;
   logs)
     run_compose logs -f "$SERVICE"
@@ -201,16 +205,13 @@ case "${1:-help}" in
     status
     ;;
   help|*)
-    echo "Usage: $0 {build|start|stop|restart|shell|rebuild|rebuild-cpp|rebuild-ros2|run [config]|run-ros2 [launch] [params]|logs|status}"
+    echo "Usage: $0 {build|start|stop|restart|shell|rebuild|rebuild-cpp|rebuild-ros2|run-online [params]|run-offline [params]|logs|status}"
     echo ""
     echo "Examples:"
     echo "  $0 build"
     echo "  $0 start"
     echo "  $0 rebuild"
-    echo "  $0 rebuild-cpp"
-    echo "  $0 rebuild-ros2"
-    echo "  $0 run"
-    echo "  $0 run docker/run_config.yaml"
-    echo "  $0 run-ros2 oaslam_wrapper.launch.py /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper.yaml"
+    echo "  $0 run-online [params]  # default /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/wrapper_vio.yaml"
+    echo "  $0 run-offline [params]  # default /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/offline_vio.yaml"
     ;;
 esac

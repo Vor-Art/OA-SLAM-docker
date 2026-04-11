@@ -182,7 +182,6 @@ void Viewer::Run()
     pangolin::Var<bool> menuShowKeyFrames("menu.Show KeyFrames",true,true);
     pangolin::Var<bool> menuShowGraph("menu.Show Graph",false,true);
     pangolin::Var<bool> menuShowInertialGraph("menu.Show Inertial Graph",true,true);
-    pangolin::Var<bool> menuLocalizationMode("menu.Localization Mode",false,true);
     pangolin::Var<bool> menuReset("menu.Reset",false,false);
     pangolin::Var<bool> menuStop("menu.Stop",false,false);
     pangolin::Var<bool> menuStepByStep("menu.Step By Step",false,true);  // false, true
@@ -218,7 +217,6 @@ void Viewer::Run()
     cv::namedWindow("OA-SLAM3: Current Frame");
 
     bool bFollow = true;
-    bool bLocalizationMode = false;
     bool bStepByStep = false;
     bool bCameraView = true;
 
@@ -286,17 +284,6 @@ void Viewer::Run()
             s_cam.SetProjectionMatrix(pangolin::ProjectionMatrix(1024,768,3000,3000,512,389,0.1,10000));
             s_cam.SetModelViewMatrix(pangolin::ModelViewLookAt(0,0.01,50, 0,0,0,0.0,0.0, 1.0));
             s_cam.Follow(Ow);
-        }
-
-        if(menuLocalizationMode && !bLocalizationMode)
-        {
-            mpSystem->ActivateLocalizationMode();
-            bLocalizationMode = true;
-        }
-        else if(!menuLocalizationMode && bLocalizationMode)
-        {
-            mpSystem->DeactivateLocalizationMode();
-            bLocalizationMode = false;
         }
 
         if(menuStepByStep && !bStepByStep)
@@ -368,10 +355,6 @@ void Viewer::Run()
             menuShowInertialGraph = true;
             menuShowKeyFrames = true;
             menuShowPoints = true;
-            menuLocalizationMode = false;
-            if(bLocalizationMode)
-                mpSystem->DeactivateLocalizationMode();
-            bLocalizationMode = false;
             bFollow = true;
             menuFollowCamera = true;
             mpSystem->ResetActiveMap();
@@ -380,9 +363,6 @@ void Viewer::Run()
 
         if(menuStop)
         {
-            if(bLocalizationMode)
-                mpSystem->DeactivateLocalizationMode();
-
             // Stop all threads
             mpSystem->Shutdown();
 

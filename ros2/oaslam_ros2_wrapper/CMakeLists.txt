@@ -21,24 +21,6 @@ find_package(rosbag2_storage REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 
-add_executable(oaslam_wrapper_node
-  src/oaslam_wrapper_node.cpp
-)
-
-target_link_libraries(oaslam_wrapper_node
-  Eigen3::Eigen
-  oaslam::oaslam_sdk
-)
-
-ament_target_dependencies(oaslam_wrapper_node
-  cv_bridge
-  geometry_msgs
-  image_transport
-  rclcpp
-  sensor_msgs
-  std_msgs
-)
-
 add_executable(oaslam_vio_node
   src/oaslam_vio_node.cpp
 )
@@ -74,7 +56,7 @@ ament_target_dependencies(oaslam_offline_vio_node
   sensor_msgs
 )
 
-install(TARGETS oaslam_wrapper_node oaslam_vio_node oaslam_offline_vio_node
+install(TARGETS oaslam_vio_node oaslam_offline_vio_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

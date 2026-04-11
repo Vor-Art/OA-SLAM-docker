@@ -66,7 +66,7 @@ Verbose::eLevel Verbose::th = Verbose::VERBOSITY_NORMAL;
 System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
                const bool bUseViewer, const int initFr, const string &strSequence, int use_objects_in_local_BA):
     mSensor(sensor), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false), mbResetActiveMap(false),
-    mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false), mbShutDown(false), mShouldQuit(false)
+    mbShutDown(false), mShouldQuit(false)
 {
     // Output welcome message
     cout << endl <<
@@ -301,30 +301,6 @@ Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, 
         imRightToFeed = imRight.clone();
     }
 
-    // Check mode change
-    {
-        unique_lock<mutex> lock(mMutexMode);
-        if(mbActivateLocalizationMode)
-        {
-            mpLocalMapper->RequestStop();
-
-            // Wait until Local Mapping has effectively stopped
-            while(!mpLocalMapper->isStopped())
-            {
-                usleep(1000);
-            }
-
-            mpTracker->InformOnlyTracking(true);
-            mbActivateLocalizationMode = false;
-        }
-        if(mbDeactivateLocalizationMode)
-        {
-            mpTracker->InformOnlyTracking(false);
-            mpLocalMapper->Release();
-            mbDeactivateLocalizationMode = false;
-        }
-    }
-
     // Check reset
     {
         unique_lock<mutex> lock(mMutexReset);
@@ -374,30 +350,6 @@ Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const
         imToFeed = resizedIm;
 
         cv::resize(depthmap,imDepthToFeed,settings_->newImSize());
-    }
-
-    // Check mode change
-    {
-        unique_lock<mutex> lock(mMutexMode);
-        if(mbActivateLocalizationMode)
-        {
-            mpLocalMapper->RequestStop();
-
-            // Wait until Local Mapping has effectively stopped
-            while(!mpLocalMapper->isStopped())
-            {
-                usleep(1000);
-            }
-
-            mpTracker->InformOnlyTracking(true);
-            mbActivateLocalizationMode = false;
-        }
-        if(mbDeactivateLocalizationMode)
-        {
-            mpTracker->InformOnlyTracking(false);
-            mpLocalMapper->Release();
-            mbDeactivateLocalizationMode = false;
-        }
     }
 
     // Check reset
@@ -453,30 +405,6 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp,
         imToFeed = resizedIm;
     }
 
-    // Check mode change
-    {
-        unique_lock<mutex> lock(mMutexMode);
-        if(mbActivateLocalizationMode)
-        {
-            mpLocalMapper->RequestStop();
-
-            // Wait until Local Mapping has effectively stopped
-            while(!mpLocalMapper->isStopped())
-            {
-                usleep(1000);
-            }
-
-            mpTracker->InformOnlyTracking(true);
-            mbActivateLocalizationMode = false;
-        }
-        if(mbDeactivateLocalizationMode)
-        {
-            mpTracker->InformOnlyTracking(false);
-            mpLocalMapper->Release();
-            mbDeactivateLocalizationMode = false;
-        }
-    }
-
     // Check reset
     {
         unique_lock<mutex> lock(mMutexReset);
@@ -521,20 +449,6 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp,
     mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
 
     return Tcw;
-}
-
-
-
-void System::ActivateLocalizationMode()
-{
-    unique_lock<mutex> lock(mMutexMode);
-    mbActivateLocalizationMode = true;
-}
-
-void System::DeactivateLocalizationMode()
-{
-    unique_lock<mutex> lock(mMutexMode);
-    mbDeactivateLocalizationMode = true;
 }
 
 bool System::MapChanged()
@@ -1708,4 +1622,3 @@ void System::remove_nth_object_by_cat(int cat, int nth)
 }
 
 } //namespace ORB_SLAM
-

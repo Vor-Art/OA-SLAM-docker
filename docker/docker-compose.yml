@@ -42,7 +42,6 @@ services:
       - ../cmake:/opt/OA-SLAM/cmake:ro
       - ../include:/opt/OA-SLAM/include:ro
       - ../src:/opt/OA-SLAM/src:ro
-      - ../examples:/opt/OA-SLAM/examples:ro
       - ../ros2:/opt/OA-SLAM/ros2:ro
       - ../ros2/oaslam_ros2_wrapper:/opt/oaslam_ros2_ws/src/oaslam_ros2_wrapper:ro
       - ../Data:/opt/OA-SLAM/Data
