@@ -12,6 +12,8 @@
 #include <thread>
 #include <vector>
 
+#include <sensor_msgs/point_cloud2_iterator.hpp>
+
 namespace oaslam_ros2_wrapper {
 namespace {
 
@@ -127,6 +129,13 @@ OnlineTopicParams DeclareOnlineTopicParameters(rclcpp::Node& node) {
   params.shared = DeclareSharedTopicParameters(node);
   params.publisher.pose_topic =
       node.declare_parameter<std::string>("pose_topic", "/oaslam/pose");
+  params.publisher.map_points_topic = node.declare_parameter<std::string>(
+      "map_points_topic", "/oaslam/map_points");
+  params.publisher.new_map_points_topic = node.declare_parameter<std::string>(
+      "new_map_points_topic", "/oaslam/new_map_points");
+  params.publisher.visible_map_points_topic =
+      node.declare_parameter<std::string>(
+          "visible_map_points_topic", "/oaslam/visible_map_points");
   params.publisher.world_frame_id =
       node.declare_parameter<std::string>("world_frame_id", "map");
   return params;
@@ -137,6 +146,13 @@ OfflineTopicParams DeclareOfflineTopicParameters(rclcpp::Node& node) {
   params.shared = DeclareSharedTopicParameters(node);
   params.publisher.pose_topic =
       node.declare_parameter<std::string>("pose_topic", "/oaslam/pose");
+  params.publisher.map_points_topic = node.declare_parameter<std::string>(
+      "map_points_topic", "/oaslam/map_points");
+  params.publisher.new_map_points_topic = node.declare_parameter<std::string>(
+      "new_map_points_topic", "/oaslam/new_map_points");
+  params.publisher.visible_map_points_topic =
+      node.declare_parameter<std::string>(
+          "visible_map_points_topic", "/oaslam/visible_map_points");
   params.publisher.world_frame_id =
       node.declare_parameter<std::string>("world_frame_id", "map");
   params.bag_path = node.declare_parameter<std::string>("bag_path", "");
@@ -322,6 +338,33 @@ geometry_msgs::msg::PoseStamped ToPoseStamped(
   pose.pose.orientation.z = quaternion.z();
   pose.pose.orientation.w = quaternion.w();
   return pose;
+}
+
+sensor_msgs::msg::PointCloud2 ToPointCloud2(
+    const std_msgs::msg::Header& header,
+    const std::string& world_frame_id,
+    const std::vector<cv::Point3d>& points) {
+  sensor_msgs::msg::PointCloud2 cloud;
+  cloud.header = header;
+  cloud.header.frame_id = world_frame_id;
+
+  sensor_msgs::PointCloud2Modifier modifier(cloud);
+  modifier.setPointCloud2FieldsByString(1, "xyz");
+  modifier.resize(points.size());
+
+  sensor_msgs::PointCloud2Iterator<float> iter_x(cloud, "x");
+  sensor_msgs::PointCloud2Iterator<float> iter_y(cloud, "y");
+  sensor_msgs::PointCloud2Iterator<float> iter_z(cloud, "z");
+  for (const auto& point : points) {
+    *iter_x = static_cast<float>(point.x);
+    *iter_y = static_cast<float>(point.y);
+    *iter_z = static_cast<float>(point.z);
+    ++iter_x;
+    ++iter_y;
+    ++iter_z;
+  }
+
+  return cloud;
 }
 
 void WriteTumPoseLine(std::ofstream& output,

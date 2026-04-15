@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "oaslam/core/session_types.h"
@@ -45,6 +46,7 @@ class OrbSlam3BackendAdapter final : public ISlamBackend {
       const std::vector<Detection2D>& detections) const;
 
   std::unique_ptr<ORB_SLAM3::System> system_;
+  std::unordered_set<unsigned long> seen_map_point_ids_;
   bool use_imu_ = false;
   bool shutdown_called_ = false;
 };

@@ -9,6 +9,7 @@
 #include <rmw/qos_profiles.h>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <cmath>
 #include <cstdint>
@@ -40,6 +41,13 @@ class OaSlamVioNode : public rclcpp::Node {
     // Set up publishers
     pose_publisher_ =
         create_publisher<geometry_msgs::msg::PoseStamped>(topics_.publisher.pose_topic, 10);
+    map_points_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+        topics_.publisher.map_points_topic, 10);
+    new_map_points_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+        topics_.publisher.new_map_points_topic, 10);
+    visible_map_points_publisher_ =
+        create_publisher<sensor_msgs::msg::PointCloud2>(
+            topics_.publisher.visible_map_points_topic, 10);
 
     // Set up IMU subscription (independent, not synchronized — arrives at 200Hz)
     // Large queue to buffer IMU during backpressure waits
@@ -74,6 +82,9 @@ class OaSlamVioNode : public rclcpp::Node {
          {"Depth topic", topics_.shared.depth_topic},
          {"IMU topic", topics_.shared.imu_topic},
          {"Pose topic", topics_.publisher.pose_topic},
+         {"Map points topic", topics_.publisher.map_points_topic},
+         {"New map points topic", topics_.publisher.new_map_points_topic},
+         {"Visible map points topic", topics_.publisher.visible_map_points_topic},
          {"World frame", topics_.publisher.world_frame_id},
          {"Camera ID", topics_.shared.camera_id},
          {"Output folder", runtime_.session_params.output_folder}});
@@ -174,6 +185,15 @@ class OaSlamVioNode : public rclcpp::Node {
             rgb_msg->header,
             topics_.publisher.world_frame_id,
             result.tracking.T_world_camera));
+    map_points_publisher_->publish(oaslam_ros2_wrapper::ToPointCloud2(
+        rgb_msg->header, topics_.publisher.world_frame_id,
+        result.tracking.scene.map_points));
+    new_map_points_publisher_->publish(oaslam_ros2_wrapper::ToPointCloud2(
+        rgb_msg->header, topics_.publisher.world_frame_id,
+        result.tracking.scene.new_map_points));
+    visible_map_points_publisher_->publish(oaslam_ros2_wrapper::ToPointCloud2(
+        rgb_msg->header, topics_.publisher.world_frame_id,
+        result.tracking.scene.visible_map_points));
 
     if (runtime_.tum_trajectory_file.is_open()) {
       oaslam_ros2_wrapper::WriteTumPoseLine(
@@ -211,6 +231,11 @@ class OaSlamVioNode : public rclcpp::Node {
 
   // Pose publisher
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_publisher_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+      new_map_points_publisher_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+      visible_map_points_publisher_;
 
   // Timer for missing image warning
   rclcpp::TimerBase::SharedPtr missing_image_timer_;

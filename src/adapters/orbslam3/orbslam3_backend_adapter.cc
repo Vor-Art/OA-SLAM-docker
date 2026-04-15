@@ -80,12 +80,28 @@ TrackingResult OrbSlam3BackendAdapter::processFrame(
   }
 
   // Extract tracked map points and keypoints
+  const auto map_points = system_->GetAllMapPoints();
   const auto tracked_points = system_->GetTrackedMapPoints();
   const auto tracked_keypoints = system_->GetTrackedKeyPointsUn();
+  result.scene.map_points.reserve(map_points.size());
+  result.scene.new_map_points.reserve(map_points.size());
   const std::size_t count =
       std::min(tracked_points.size(), tracked_keypoints.size());
   result.scene.tracked_features.reserve(count);
   result.scene.visible_map_points.reserve(count);
+
+  for (ORB_SLAM3::MapPoint* map_point : map_points) {
+    if (map_point == nullptr || map_point->isBad()) {
+      continue;
+    }
+
+    const Eigen::Vector3f position = map_point->GetWorldPos();
+    const cv::Point3d world_point = orbslam3_utils::EigenToPoint3d(position);
+    result.scene.map_points.push_back(world_point);
+    if (seen_map_point_ids_.insert(map_point->mnId).second) {
+      result.scene.new_map_points.push_back(world_point);
+    }
+  }
 
   for (std::size_t i = 0; i < count; ++i) {
     ORB_SLAM3::MapPoint* map_point = tracked_points[i];
@@ -137,6 +153,7 @@ void OrbSlam3BackendAdapter::reset() {
   if (system_) {
     system_->ResetActiveMap();
   }
+  seen_map_point_ids_.clear();
 }
 
 void OrbSlam3BackendAdapter::shutdown() {
@@ -146,6 +163,7 @@ void OrbSlam3BackendAdapter::shutdown() {
   if (system_) {
     system_->Shutdown();
   }
+  seen_map_point_ids_.clear();
   shutdown_called_ = true;
 }
 

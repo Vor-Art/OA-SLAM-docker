@@ -34,6 +34,7 @@ target_link_libraries(oaslam_ros2_wrapper_common
 ament_target_dependencies(oaslam_ros2_wrapper_common
   geometry_msgs
   rclcpp
+  sensor_msgs
   std_msgs
 )
 

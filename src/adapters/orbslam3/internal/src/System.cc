@@ -1296,6 +1296,12 @@ int System::GetTrackingState()
     return mTrackingState;
 }
 
+vector<MapPoint*> System::GetAllMapPoints()
+{
+    unique_lock<mutex> lock(mMutexState);
+    return mpAtlas ? mpAtlas->GetAllMapPoints() : vector<MapPoint*>{};
+}
+
 vector<MapPoint*> System::GetTrackedMapPoints()
 {
     unique_lock<mutex> lock(mMutexState);

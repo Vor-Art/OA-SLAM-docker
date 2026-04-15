@@ -22,6 +22,8 @@ struct SceneSlice {
   Transform4d T_world_camera = Transform4d::eye();
   double mean_depth = 0.0;
   std::vector<TrackedFeature> tracked_features;
+  std::vector<cv::Point3d> map_points;
+  std::vector<cv::Point3d> new_map_points;
   std::vector<cv::Point3d> visible_map_points;
 };
 

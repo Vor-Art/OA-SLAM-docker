@@ -8,7 +8,9 @@
 #include <vector>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <opencv2/core/types.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/header.hpp>
 
 #include "oaslam/app/slam_session.h"
@@ -19,6 +21,9 @@ namespace oaslam_ros2_wrapper {
 
 struct PublisherParams {
   std::string pose_topic;
+  std::string map_points_topic;
+  std::string new_map_points_topic;
+  std::string visible_map_points_topic;
   std::string world_frame_id;
 };
 
@@ -89,6 +94,11 @@ geometry_msgs::msg::PoseStamped ToPoseStamped(
     const std_msgs::msg::Header& header,
     const std::string& world_frame_id,
     const oaslam::Transform4d& transform);
+
+sensor_msgs::msg::PointCloud2 ToPointCloud2(
+    const std_msgs::msg::Header& header,
+    const std::string& world_frame_id,
+    const std::vector<cv::Point3d>& points);
 
 void WriteTumPoseLine(std::ofstream& output,
                       double timestamp,
