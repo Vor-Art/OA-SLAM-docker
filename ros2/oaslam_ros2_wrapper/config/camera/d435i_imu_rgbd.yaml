@@ -39,6 +39,12 @@ Model.height: 480
 Detector.CenterReprojectionThresholdPx: 50.0
 
 #--------------------------------------------------------------------------------------------
+# Debug Parameters
+#--------------------------------------------------------------------------------------------
+# Emit a compact object-tracking report every N frames. Set to 0 to disable.
+Debug.FrameReportInterval: 10
+
+#--------------------------------------------------------------------------------------------
 # Depth Parameters
 #--------------------------------------------------------------------------------------------
 # D435i depth is reported in millimeters. ORB-SLAM3 expects meters.

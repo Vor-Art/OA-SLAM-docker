@@ -448,6 +448,14 @@ namespace ORB_SLAM3 {
         if(!found) {
             centerReprojectionThresholdPx_ = 100.0f;
         }
+        frameReportInterval_ = readParameter<int>(
+            fSettings, "Debug.FrameReportInterval", found, false);
+        if(!found) {
+            frameReportInterval_ = 10;
+        }
+        if(frameReportInterval_ < 0) {
+            frameReportInterval_ = 0;
+        }
     }
 
     void Settings::readIMU(cv::FileStorage &fSettings) {

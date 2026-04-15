@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <atomic>
 #include <chrono>
 #include <deque>
 #include <map>
@@ -66,6 +67,15 @@ struct TimestampedDepth {
   std::shared_ptr<rosbag2_storage::SerializedBagMessage> msg;
 };
 
+std::string TopicSummary(const std::map<std::string, std::string>& topic_type_map,
+                         const std::string& topic_name) {
+  const auto it = topic_type_map.find(topic_name);
+  if (it == topic_type_map.end()) {
+    return "missing:" + topic_name;
+  }
+  return "ok:" + topic_name + " [" + it->second + "]";
+}
+
 }  // namespace
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,12 +88,15 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       : rclcpp::Node("oaslam_offline_vio_node", options) {
     topics_ = oaslam_ros2_wrapper::DeclareOfflineTopicParameters(*this);
     runtime_ = oaslam_ros2_wrapper::CreateNodeRuntime(*this);
+    rclcpp::on_shutdown(
+        [flag = shutdown_requested_]() { flag->store(true); },
+        get_node_base_interface()->get_context());
     
     // Set up publishers
     pose_publisher_ =
         create_publisher<geometry_msgs::msg::PoseStamped>(topics_.publisher.pose_topic, 10);
 
-        oaslam_ros2_wrapper::LogNodeStartup(
+    oaslam_ros2_wrapper::LogNodeStartup(
         get_logger(), "offline VIO", runtime_.session_params,
         {{"Bag path", topics_.bag_path},
          {"RGB topic", topics_.shared.rgb_topic},
@@ -101,7 +114,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
 
   /// Run the full offline pipeline: open bag -> stream -> process -> save.
   void Run() {
-    RCLCPP_INFO(get_logger(), "Opening rosbag: %s", topics_.bag_path.c_str());
+    RCLCPP_INFO(get_logger(), "Bag input | path=%s", topics_.bag_path.c_str());
 
     // ── Open the bag ──
     rosbag2_cpp::Reader reader;
@@ -121,40 +134,28 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       topic_type_map[info.name] = info.type;
     }
 
-    RCLCPP_INFO(get_logger(), "Bag contains %zu topics:", topics_and_types.size());
-    for (const auto& info : topics_and_types) {
-      RCLCPP_INFO(get_logger(), "  topic: '%s'  type: [%s]  serialization: %s",
-                  info.name.c_str(), info.type.c_str(),
-                  info.serialization_format.c_str());
-    }
-
     RCLCPP_INFO(get_logger(),
-                "Topic resolution summary:\n"
-                "  RGB topic:   '%s' -> %s\n"
-                "  Depth topic: '%s' -> %s\n"
-                "  IMU topic:   '%s' -> %s",
-                topics_.shared.rgb_topic.c_str(),
-                topic_type_map.count(topics_.shared.rgb_topic) ? "FOUND" : "NOT FOUND",
-                topics_.shared.depth_topic.c_str(),
-                topic_type_map.count(topics_.shared.depth_topic) ? "FOUND" : "NOT FOUND",
-                topics_.shared.imu_topic.c_str(),
-                topic_type_map.count(topics_.shared.imu_topic) ? "FOUND" : "NOT FOUND");
+                "Bag scan | topics=%zu | rgb=%s | depth=%s | imu=%s",
+                topics_and_types.size(),
+                TopicSummary(topic_type_map, topics_.shared.rgb_topic).c_str(),
+                TopicSummary(topic_type_map, topics_.shared.depth_topic).c_str(),
+                TopicSummary(topic_type_map, topics_.shared.imu_topic).c_str());
 
     // Verify required topics exist
     if (topic_type_map.find(topics_.shared.rgb_topic) == topic_type_map.end()) {
-      RCLCPP_ERROR(get_logger(), "RGB topic '%s' not found in bag! Aborting.",
+      RCLCPP_ERROR(get_logger(), "Missing required bag topic | rgb=%s",
                    topics_.shared.rgb_topic.c_str());
       oaslam_ros2_wrapper::ShutdownNodeRuntime(runtime_, get_logger());
       return;
     }
     if (topic_type_map.find(topics_.shared.depth_topic) == topic_type_map.end()) {
-      RCLCPP_ERROR(get_logger(), "Depth topic '%s' not found in bag! Aborting.",
+      RCLCPP_ERROR(get_logger(), "Missing required bag topic | depth=%s",
                    topics_.shared.depth_topic.c_str());
       oaslam_ros2_wrapper::ShutdownNodeRuntime(runtime_, get_logger());
       return;
     }
     if (topic_type_map.find(topics_.shared.imu_topic) == topic_type_map.end()) {
-      RCLCPP_WARN(get_logger(), "IMU topic '%s' not found in bag. Proceeding without IMU.",
+      RCLCPP_WARN(get_logger(), "IMU topic missing in bag | imu=%s | continuing without IMU",
                   topics_.shared.imu_topic.c_str());
     }
 
@@ -174,19 +175,13 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     uint64_t imu_nan_filtered = 0;
     uint64_t total_ignored_messages = 0;
 
-    // Track per-topic message counts for final summary
-    std::map<std::string, uint64_t> per_topic_msg_count;
-
-    // Track whether we've logged the first message for each topic
-    std::map<std::string, bool> first_msg_logged;
-
     // Last known good pose
     oaslam::Transform4d last_known_pose = oaslam::Transform4d::eye();
 
     bool quit_requested = false;
     auto wall_start = std::chrono::steady_clock::now();
 
-    RCLCPP_INFO(get_logger(), "Streaming bag messages...");
+    RCLCPP_INFO(get_logger(), "Bag playback started");
 
     // ── Single-pass streaming loop ──
     // The rosbag2 sequential reader delivers messages in storage order
@@ -199,23 +194,9 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     //   - RGB:   TRIGGER PROCESSING — find closest depth, drain IMU,
     //            build FramePacket, process, write trajectory line
 
-    while (reader.has_next() && !quit_requested) {
+    while (rclcpp::ok() && reader.has_next() && !quit_requested) {
       auto bag_msg = reader.read_next();
       const std::string& topic = bag_msg->topic_name;
-
-      // Track per-topic message counts
-      per_topic_msg_count[topic]++;
-
-      // Log the first message seen on each topic (helps debug topic issues)
-      if (first_msg_logged.find(topic) == first_msg_logged.end()) {
-        first_msg_logged[topic] = true;
-        const double msg_ts = NanosToSeconds(bag_msg->time_stamp);
-        const std::string type_str = topic_type_map.count(topic)
-            ? topic_type_map.at(topic) : "(unknown type)";
-        RCLCPP_INFO(get_logger(),
-                    "First message on topic '%s' [%s] at t=%.6f s",
-                    topic.c_str(), type_str.c_str(), msg_ts);
-      }
 
       // ────────────────────────────────────────────────────────────────
       // IMU message
@@ -293,15 +274,13 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           total_frames_skipped_no_depth++;
           if (total_frames_skipped_no_depth <= 10) {
             RCLCPP_WARN(get_logger(),
-                        "Frame %lu (t=%.6f): no depth candidates in buffer "
-                        "(depth_window size=%zu). Skipping frame.",
+                        "Frame skipped | id=%lu t=%.6f | reason=no-depth-candidate | depth_window=%zu",
                         static_cast<unsigned long>(frame_counter),
                         image_timestamp,
                         depth_window.size());
           }
           if (total_frames_skipped_no_depth == 10) {
-            RCLCPP_WARN(get_logger(),
-                        "Suppressing further 'no depth' warnings (10 already logged).");
+            RCLCPP_WARN(get_logger(), "Further no-depth skip warnings suppressed");
           }
 
           // Write fallback trajectory line for skipped frame
@@ -320,7 +299,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         try {
           cv_rgb = cv_bridge::toCvCopy(rgb_msg, "bgr8");
         } catch (const cv_bridge::Exception& exc) {
-          RCLCPP_WARN(get_logger(), "Frame %lu: failed to convert RGB: %s",
+          RCLCPP_WARN(get_logger(), "Frame skipped | id=%lu | rgb-convert err=%s",
                       static_cast<unsigned long>(frame_counter), exc.what());
           total_poses_interpolated++;
           if (runtime_.tum_trajectory_file.is_open()) {
@@ -342,7 +321,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
             depth_mat = cv_depth->image;
             has_depth = true;
           } catch (const cv_bridge::Exception& exc) {
-            RCLCPP_WARN(get_logger(), "Frame %lu: failed to convert depth: %s",
+            RCLCPP_WARN(get_logger(), "Frame skipped | id=%lu | depth-convert err=%s",
                         static_cast<unsigned long>(frame_counter), exc.what());
           }
         }
@@ -351,13 +330,13 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         if (has_depth) {
           if (depth_mat.empty()) {
             RCLCPP_WARN(get_logger(),
-                        "Frame %lu: depth image deserialized but is empty. Skipping frame.",
+                        "Frame skipped | id=%lu | reason=empty-depth",
                         static_cast<unsigned long>(frame_counter));
             has_depth = false;
           } else if (depth_mat.rows != cv_rgb->image.rows ||
                      depth_mat.cols != cv_rgb->image.cols) {
             RCLCPP_WARN(get_logger(),
-                        "Frame %lu: depth size (%dx%d) != RGB size (%dx%d). Skipping frame.",
+                        "Frame skipped | id=%lu | reason=depth-size-mismatch | depth=%dx%d rgb=%dx%d",
                         static_cast<unsigned long>(frame_counter),
                         depth_mat.cols, depth_mat.rows,
                         cv_rgb->image.cols, cv_rgb->image.rows);
@@ -427,7 +406,11 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         frame.has_imu = !frame.imu_measurements.empty();
 
         // ── 10. Backpressure ──
-        oaslam_ros2_wrapper::WaitForMappingBackpressure(*runtime_.session);
+        if (!oaslam_ros2_wrapper::WaitForMappingBackpressure(*runtime_.session)) {
+          RCLCPP_INFO(get_logger(), "Bag playback interrupted | reason=shutdown");
+          quit_requested = true;
+          continue;
+        }
 
         // ── 11. Process frame ──
         const auto result = runtime_.session->processFrame(frame);
@@ -437,10 +420,12 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         if (result.tracking.has_pose) {
           total_poses_obtained++;
           last_known_pose = result.tracking.T_world_camera;
-          pose_publisher_->publish(oaslam_ros2_wrapper::ToPoseStamped(
-              rgb_msg->header,
-              topics_.publisher.world_frame_id,
-              result.tracking.T_world_camera));
+          if (!shutdown_requested_->load() && rclcpp::ok()) {
+            pose_publisher_->publish(oaslam_ros2_wrapper::ToPoseStamped(
+                rgb_msg->header,
+                topics_.publisher.world_frame_id,
+                result.tracking.T_world_camera));
+          }
         } else {
           total_poses_interpolated++;
         }
@@ -455,18 +440,17 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           auto now = std::chrono::steady_clock::now();
           double elapsed_sec = std::chrono::duration<double>(now - wall_start).count();
           double fps = total_frames_processed / elapsed_sec;
-          RCLCPP_INFO(get_logger(),
-                      "Progress: %lu frames processed, %lu poses, %lu skipped (no depth), "
-                      "%.1f fps",
+          std::printf("Progress | frames=%lu tracked=%lu fallback=%lu skip_no_depth=%lu fps=%.1f\n",
                       static_cast<unsigned long>(total_frames_processed),
                       static_cast<unsigned long>(total_poses_obtained),
+                      static_cast<unsigned long>(total_poses_interpolated),
                       static_cast<unsigned long>(total_frames_skipped_no_depth),
                       fps);
         }
 
         // Check if SLAM requested quit
         if (result.quit_requested) {
-          RCLCPP_INFO(get_logger(), "SLAM session requested quit.");
+          RCLCPP_INFO(get_logger(), "SLAM requested quit");
           quit_requested = true;
         }
 
@@ -481,50 +465,27 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     auto wall_end = std::chrono::steady_clock::now();
     double total_sec = std::chrono::duration<double>(wall_end - wall_start).count();
 
-    // Log per-topic message counts
-    RCLCPP_INFO(get_logger(), "Per-topic message counts read from bag:");
-    for (const auto& [tname, tcount] : per_topic_msg_count) {
-      const std::string type_str = topic_type_map.count(tname)
-          ? topic_type_map.at(tname) : "(unknown)";
-      const char* role = "";
-      if (tname == topics_.shared.rgb_topic) role = " [RGB]";
-      else if (tname == topics_.shared.depth_topic) role = " [DEPTH]";
-      else if (tname == topics_.shared.imu_topic) role = " [IMU]";
-      else role = " [ignored]";
-      RCLCPP_INFO(get_logger(), "  '%s' [%s]: %lu messages%s",
-                  tname.c_str(), type_str.c_str(),
-                  static_cast<unsigned long>(tcount), role);
+    if (!rclcpp::ok() && !quit_requested) {
+      RCLCPP_INFO(get_logger(), "Bag playback stopped | reason=shutdown");
     }
 
-    RCLCPP_INFO(get_logger(),
-                "\n========================================\n"
-                "  Offline VIO processing complete\n"
-                "  RGB images in bag: %lu\n"
-                "  Depth images in bag: %lu\n"
-                "  IMU samples in bag: %lu (NaN filtered: %lu)\n"
-                "  Ignored messages:  %lu\n"
-                "  Frames processed:  %lu\n"
-                "  Frames skipped (no depth): %lu\n"
-                "  Poses (tracked):   %lu\n"
-                "  Poses (fallback):  %lu\n"
-                "  Depth topic:         %s\n"
-                "  Trajectory lines:  %lu (1:1 with RGB)\n"
-                "  Wall time:         %.1f s\n"
-                "  Average FPS:       %.1f\n"
-                "========================================",
-                static_cast<unsigned long>(total_rgb_in_bag),
-                static_cast<unsigned long>(total_depth_in_bag),
-                static_cast<unsigned long>(total_imu_in_bag),
-                static_cast<unsigned long>(imu_nan_filtered),
-                static_cast<unsigned long>(total_ignored_messages),
-                static_cast<unsigned long>(total_frames_processed),
-                static_cast<unsigned long>(total_frames_skipped_no_depth),
-                static_cast<unsigned long>(total_poses_obtained),
-                static_cast<unsigned long>(total_poses_interpolated),
-                topics_.shared.depth_topic.c_str(),
-                static_cast<unsigned long>(total_rgb_in_bag),
-                total_sec,
-                total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0);
+    std::printf(
+        "Offline VIO done | rgb=%lu depth=%lu imu=%lu imu_nan=%lu ignored=%lu "
+        "processed=%lu tracked=%lu fallback=%lu skip_no_depth=%lu traj=%lu "
+        "wall=%.1fs fps=%.1f\n",
+        static_cast<unsigned long>(total_rgb_in_bag),
+        static_cast<unsigned long>(total_depth_in_bag),
+        static_cast<unsigned long>(total_imu_in_bag),
+        static_cast<unsigned long>(imu_nan_filtered),
+        static_cast<unsigned long>(total_ignored_messages),
+        static_cast<unsigned long>(total_frames_processed),
+        static_cast<unsigned long>(total_poses_obtained),
+        static_cast<unsigned long>(total_poses_interpolated),
+        static_cast<unsigned long>(total_frames_skipped_no_depth),
+        static_cast<unsigned long>(total_rgb_in_bag),
+        total_sec,
+        total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0
+    );
     oaslam_ros2_wrapper::ShutdownNodeRuntime(runtime_, get_logger());
   }
 
@@ -532,6 +493,8 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
   oaslam_ros2_wrapper::NodeRuntime runtime_;
   oaslam_ros2_wrapper::OfflineTopicParams topics_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher_;
+  std::shared_ptr<std::atomic<bool>> shutdown_requested_ =
+      std::make_shared<std::atomic<bool>>(false);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -549,7 +512,7 @@ int main(int argc, char** argv) {
 
   } catch (const std::exception& exc) {
     RCLCPP_FATAL(rclcpp::get_logger("oaslam_offline_vio_node"),
-                 "Fatal error: %s", exc.what());
+                 "Startup failed | err=%s", exc.what());
     rclcpp::shutdown();
     return 1;
   }

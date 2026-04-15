@@ -156,7 +156,7 @@ void ImuCamPose::SetParam(const std::vector<Eigen::Matrix3d> &_Rcw, const std::v
     Rcb.resize(num_cams);
     tcb.resize(num_cams);
 
-    for(int i=0; i<tcb.size(); i++)
+    for(size_t i=0; i<tcb.size(); i++)
     {
         Rcb[i] = Rbc[i].transpose();
         tcb[i] = -Rcb[i]*tbc[i];
@@ -211,7 +211,7 @@ void ImuCamPose::Update(const double *pu)
     const Eigen::Matrix3d Rbw = Rwb.transpose();
     const Eigen::Vector3d tbw = -Rbw * twb;
 
-    for(int i=0; i<pCamera.size(); i++)
+    for(size_t i=0; i<pCamera.size(); i++)
     {
         Rcw[i] = Rcb[i] * Rbw;
         tcw[i] = Rcb[i] * tbw + tcb[i];

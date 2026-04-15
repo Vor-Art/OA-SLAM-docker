@@ -78,7 +78,7 @@ std::string OpenTumTrajectoryFile(std::ofstream& output,
 
 void ShutdownNodeRuntime(NodeRuntime& runtime, const rclcpp::Logger& logger);
 
-void WaitForMappingBackpressure(oaslam::SlamSession& session);
+bool WaitForMappingBackpressure(oaslam::SlamSession& session);
 
 void LogNodeStartup(const rclcpp::Logger& logger,
                     const std::string& node_label,

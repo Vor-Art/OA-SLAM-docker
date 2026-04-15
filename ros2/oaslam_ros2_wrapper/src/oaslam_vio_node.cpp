@@ -12,6 +12,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -32,6 +33,9 @@ class OaSlamVioNode : public rclcpp::Node {
       : rclcpp::Node("oaslam_vio_node", options) {
     topics_ = oaslam_ros2_wrapper::DeclareOnlineTopicParameters(*this);
     runtime_ = oaslam_ros2_wrapper::CreateNodeRuntime(*this);
+    rclcpp::on_shutdown(
+        [flag = shutdown_requested_]() { flag->store(true); },
+        get_node_base_interface()->get_context());
 
     // Set up publishers
     pose_publisher_ =
@@ -97,7 +101,7 @@ class OaSlamVioNode : public rclcpp::Node {
         !std::isfinite(m.gyro_x) || !std::isfinite(m.gyro_y) || !std::isfinite(m.gyro_z) ||
         !std::isfinite(m.timestamp)) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
-                           "Dropping IMU message with NaN/Inf values");
+                           "Dropped IMU sample | reason=non-finite");
       return;
     }
 
@@ -115,7 +119,7 @@ class OaSlamVioNode : public rclcpp::Node {
       cv_rgb = cv_bridge::toCvShare(rgb_msg, "bgr8");
     } catch (const cv_bridge::Exception& exc) {
       RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 2000,
-                            "Failed to convert RGB image: %s", exc.what());
+                            "RGB conversion failed | err=%s", exc.what());
       return;
     }
 
@@ -125,7 +129,7 @@ class OaSlamVioNode : public rclcpp::Node {
       cv_depth = cv_bridge::toCvShare(depth_msg);
     } catch (const cv_bridge::Exception& exc) {
       RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 2000,
-                            "Failed to convert depth image: %s", exc.what());
+                            "Depth conversion failed | err=%s", exc.what());
       return;
     }
 
@@ -149,11 +153,18 @@ class OaSlamVioNode : public rclcpp::Node {
     // This ensures that regardless of bag playback speed (-r), the Tracking
     // thread always sees the same LocalMapping state (idle vs busy), making
     // SLAM results deterministic.
-    oaslam_ros2_wrapper::WaitForMappingBackpressure(*runtime_.session);
+    if (!oaslam_ros2_wrapper::WaitForMappingBackpressure(*runtime_.session)) {
+      RCLCPP_INFO(get_logger(), "Stopping frame processing | reason=shutdown");
+      return;
+    }
 
     // Process frame through the OA-SLAM pipeline
     const auto result = runtime_.session->processFrame(frame);
     if (!result.tracking.has_pose) {
+      return;
+    }
+
+    if (shutdown_requested_->load() || !rclcpp::ok()) {
       return;
     }
 
@@ -177,10 +188,7 @@ class OaSlamVioNode : public rclcpp::Node {
     }
 
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
-                         "No synchronized RGB+Depth images received yet.\n"
-                         "  RGB topic:   %s\n"
-                         "  Depth topic: %s\n"
-                         "  IMU topic:   %s (buffered: %zu)",
+                         "Waiting for synchronized input | rgb=%s depth=%s imu=%s imu_buffer=%zu",
                          topics_.shared.rgb_topic.c_str(),
                          topics_.shared.depth_topic.c_str(),
                          topics_.shared.imu_topic.c_str(),
@@ -210,6 +218,8 @@ class OaSlamVioNode : public rclcpp::Node {
   // State
   std::uint64_t frame_counter_ = 0;
   bool received_first_image_ = false;
+  std::shared_ptr<std::atomic<bool>> shutdown_requested_ =
+      std::make_shared<std::atomic<bool>>(false);
 };
 
 int main(int argc, char** argv) {
@@ -219,7 +229,7 @@ int main(int argc, char** argv) {
     auto node = std::make_shared<OaSlamVioNode>(rclcpp::NodeOptions{});
     rclcpp::spin(node);
   } catch (const std::exception& exc) {
-    RCLCPP_FATAL(rclcpp::get_logger("oaslam_vio_node"), "Failed to start VIO node: %s",
+    RCLCPP_FATAL(rclcpp::get_logger("oaslam_vio_node"), "Startup failed | err=%s",
                  exc.what());
     rclcpp::shutdown();
     return 1;

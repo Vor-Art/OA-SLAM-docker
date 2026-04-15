@@ -124,6 +124,9 @@ public:
     float GetCenterReprojectionThresholdPx() const {
         return center_reprojection_threshold_px_;
     }
+    int GetFrameReportInterval() const {
+        return frame_report_interval_;
+    }
 
     void RemoveTrack(ObjectTrack::Ptr track);
 
@@ -360,6 +363,7 @@ protected:
     // and inserted from just one frame. Far points requiere a match in two keyframes.
     float mThDepth;
     float center_reprojection_threshold_px_ = 100.0f;
+    int frame_report_interval_ = 10;
 
     // For RGB-D inputs only. For some datasets (e.g. TUM) the depthmap values are scaled.
     float mDepthMapFactor;
@@ -396,6 +400,9 @@ protected:
     std::vector<Detection::Ptr> current_frame_detections_;
     std::vector<Detection::Ptr> current_frame_good_detections_;
     double current_mean_depth_ = 0.0;
+    double frame_report_period_total_ms_ = 0.0;
+    size_t frame_report_period_frame_count_ = 0;
+    size_t frame_report_period_detected_objects_ = 0;
 
     //int nMapChangeIndex;
 

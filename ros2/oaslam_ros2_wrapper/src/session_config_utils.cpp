@@ -21,6 +21,10 @@ constexpr char kDefaultCameraSettingsFile[] =
 constexpr int kMaxKeyframeQueueDepth = 2;
 constexpr auto kBackpressureSleep = std::chrono::microseconds(50);
 
+const char* BoolFlag(bool value) {
+  return value ? "on" : "off";
+}
+
 std::string FormatCurrentLocalTimestamp() {
   const auto now = std::chrono::system_clock::now();
   const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
@@ -176,7 +180,7 @@ NodeRuntime CreateNodeRuntime(rclcpp::Node& node) {
   const std::string tum_path = OpenTumTrajectoryFile(
       runtime.tum_trajectory_file, runtime.session_params.output_folder);
   if (!tum_path.empty()) {
-    RCLCPP_INFO(node.get_logger(), "Saving trajectory (TUM) to: %s", tum_path.c_str());
+    RCLCPP_INFO(node.get_logger(), "Trajectory output | tum=%s", tum_path.c_str());
   }
 
   const oaslam::SessionConfig session_config =
@@ -254,20 +258,21 @@ void ShutdownNodeRuntime(NodeRuntime& runtime, const rclcpp::Logger& logger) {
   if (runtime.tum_trajectory_file.is_open()) {
     runtime.tum_trajectory_file.flush();
     runtime.tum_trajectory_file.close();
-    RCLCPP_INFO(logger, "Trajectory file closed.");
+    RCLCPP_INFO(logger, "Trajectory output closed");
   }
 
   if (runtime.session) {
     runtime.session->shutdown();
     runtime.session.reset();
-    RCLCPP_INFO(logger, "SLAM session shut down.");
+    RCLCPP_INFO(logger, "SLAM session shut down");
   }
 }
 
-void WaitForMappingBackpressure(oaslam::SlamSession& session) {
-  while (session.keyframesInQueue() > kMaxKeyframeQueueDepth) {
+bool WaitForMappingBackpressure(oaslam::SlamSession& session) {
+  while (rclcpp::ok() && session.keyframesInQueue() > kMaxKeyframeQueueDepth) {
     std::this_thread::sleep_for(kBackpressureSleep);
   }
+  return rclcpp::ok();
 }
 
 void LogNodeStartup(const rclcpp::Logger& logger,
@@ -275,10 +280,19 @@ void LogNodeStartup(const rclcpp::Logger& logger,
                     const CommonSessionParams& session_params,
                     const std::vector<std::pair<std::string, std::string>>& entries) {
   std::ostringstream stream;
-  stream << "OA-SLAM " << node_label << " node ready (ORB-SLAM3, IMU="
-         << (session_params.use_imu ? "enabled" : "disabled") << ")";
-  for (const auto& entry : entries) {
-    stream << "\n  " << entry.first << ": " << entry.second;
+  stream << "OA-SLAM " << node_label
+         << " ready | imu=" << BoolFlag(session_params.use_imu)
+         << " viewer=" << BoolFlag(session_params.use_viewer)
+         << " obs=" << session_params.observation_mode
+         << " relocal=" << session_params.relocalization_mode;
+  if (!entries.empty()) {
+    stream << "\n  ";
+  }
+  for (size_t i = 0; i < entries.size(); ++i) {
+    if (i > 0) {
+      stream << " | ";
+    }
+    stream << entries[i].first << "=" << entries[i].second;
   }
   RCLCPP_INFO(logger, "%s", stream.str().c_str());
 }

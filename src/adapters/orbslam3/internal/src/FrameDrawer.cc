@@ -116,7 +116,7 @@ cv::Mat FrameDrawer::DrawFrame(float imageScale)
     //Draw
     if(state==Tracking::NOT_INITIALIZED)
     {
-        for(unsigned int i=0; i<vMatches.size(); i++)
+        for(size_t i=0; i<vMatches.size(); i++)
         {
             if(vMatches[i]>=0)
             {
@@ -254,7 +254,7 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
     //Draw
     if(state==Tracking::NOT_INITIALIZED) //INITIALIZING
     {
-        for(unsigned int i=0; i<vMatches.size(); i++)
+        for(size_t i=0; i<vMatches.size(); i++)
         {
             if(vMatches[i]>=0)
             {

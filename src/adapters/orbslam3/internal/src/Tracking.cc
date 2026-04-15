@@ -36,6 +36,7 @@
 #include "System.h"
 #include "Utils.h"
 
+#include <iomanip>
 #include <iostream>
 
 #include <mutex>
@@ -51,6 +52,30 @@ using namespace std;
 
 namespace ORB_SLAM3
 {
+
+namespace {
+
+const char* TrackingStateName(Tracking::eTrackingState state) {
+    switch (state) {
+        case Tracking::SYSTEM_NOT_READY: return "SYSTEM_NOT_READY";
+        case Tracking::NO_IMAGES_YET: return "NO_IMAGES_YET";
+        case Tracking::NOT_INITIALIZED: return "NOT_INITIALIZED";
+        case Tracking::OK: return "OK";
+        case Tracking::RECENTLY_LOST: return "RECENTLY_LOST";
+        case Tracking::LOST: return "LOST";
+        case Tracking::OK_KLT: return "OK_KLT";
+        case Tracking::FORCE_RELOC_POINTS: return "FORCE_RELOC_POINTS";
+        case Tracking::FORCE_RELOC_OBJECTS: return "FORCE_RELOC_OBJECTS";
+        case Tracking::FORCE_RELOC_OBJECTS_AND_POINTS: return "FORCE_RELOC_BOTH";
+        default: return "UNKNOWN";
+    }
+}
+
+const char* BoolFlag(bool value) {
+    return value ? "yes" : "no";
+}
+
+}
 
 
 Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Atlas *pAtlas, KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, Settings* settings, const string &_nameSeq):
@@ -597,6 +622,7 @@ void Tracking::newParameterLoader(Settings *settings) {
     mMaxFrames = settings->fps();
     mbRGB = settings->rgb();
     center_reprojection_threshold_px_ = settings->centerReprojectionThresholdPx();
+    frame_report_interval_ = settings->frameReportInterval();
 
     //ORB parameters
     int nFeatures = settings->nFeatures();
@@ -1191,6 +1217,17 @@ bool Tracking::ParseCamParamFile(cv::FileStorage &fSettings)
     {
         center_reprojection_threshold_px_ = 100.0f;
     }
+    cv::FileNode frame_report_interval_node = fSettings["Debug.FrameReportInterval"];
+    if(!frame_report_interval_node.empty() && frame_report_interval_node.isInt())
+    {
+        frame_report_interval_ = frame_report_interval_node.operator int();
+    }
+    else
+    {
+        frame_report_interval_ = 10;
+    }
+    if(frame_report_interval_ < 0)
+        frame_report_interval_ = 0;
 
     if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD)
     {
@@ -1967,6 +2004,45 @@ void Tracking::ResetFrameIMU()
 
 void Tracking::Track()
 {
+    const auto frame_report_start = std::chrono::steady_clock::now();
+    bool frame_report_flushed = false;
+    const auto finalize_frame_report = [this, &frame_report_start, &frame_report_flushed]() {
+        if(frame_report_flushed)
+            return;
+
+        frame_report_flushed = true;
+        if(frame_report_interval_ <= 0)
+            return;
+
+        const auto frame_report_end = std::chrono::steady_clock::now();
+        const double frame_time_ms = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(
+            frame_report_end - frame_report_start).count();
+
+        frame_report_period_total_ms_ += frame_time_ms;
+        frame_report_period_frame_count_++;
+        frame_report_period_detected_objects_ += current_frame_good_detections_.size();
+
+        if(frame_report_period_frame_count_ < static_cast<size_t>(frame_report_interval_))
+            return;
+
+        Map* pCurMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
+        const size_t map_objects = pCurMap ? pCurMap->GetNumberMapObjects() : 0;
+        const double mean_ms = frame_report_period_total_ms_ /
+                               static_cast<double>(frame_report_period_frame_count_);
+
+        std::cout << "FrameReport |"
+                  << " frame=" << current_frame_idx_
+                  << " state=" << TrackingStateName(mState)
+                  << " mean_ms=" << std::fixed << std::setprecision(1) << mean_ms
+                  << std::defaultfloat
+                  << " det_period=" << frame_report_period_detected_objects_
+                  << " map_obj=" << map_objects
+                  << std::endl;
+
+        frame_report_period_total_ms_ = 0.0;
+        frame_report_period_frame_count_ = 0;
+        frame_report_period_detected_objects_ = 0;
+    };
 
     if (bStepByStep)
     {
@@ -1980,6 +2056,7 @@ void Tracking::Track()
     {
         cout << "TRACK: Reset map because local mapper set the bad imu flag " << endl;
         mpSystem->ResetActiveMap();
+        finalize_frame_report();
         return;
     }
 
@@ -1997,6 +2074,7 @@ void Tracking::Track()
             unique_lock<mutex> lock(mMutexImuQueue);
             mlQueueImuData.clear();
             CreateMapInAtlas();
+            finalize_frame_report();
             return;
         }
         else if(mCurrentFrame.mTimeStamp>mLastFrame.mTimeStamp+1.0)
@@ -2023,6 +2101,7 @@ void Tracking::Track()
                     cout << "Timestamp jump detected, before IMU initialization. Reseting..." << endl;
                     mpSystem->ResetActiveMap();
                 }
+                finalize_frame_report();
                 return;
             }
 
@@ -2086,6 +2165,7 @@ void Tracking::Track()
         if(mState!=OK) // If rightly initialized, mState=OK
         {
             mLastFrame = Frame(mCurrentFrame);
+            finalize_frame_report();
             return;
         }
 
@@ -2208,6 +2288,7 @@ void Tracking::Track()
 
                     Verbose::PrintMess("done", Verbose::VERBOSITY_NORMAL);
 
+                    finalize_frame_report();
                     return;
                 }
             }
@@ -2473,12 +2554,7 @@ void Tracking::Track()
                 current_mean_depth_ = z_mean;
             }
 
-            std::cout << "Frame " << current_frame_idx_ << " ===========\n";
-            std::cout << "Nb Object Tracks: " << objectTracks_.size() << "\n";
             Map* pCurMap = mpAtlas->GetCurrentMap();
-            if (pCurMap)
-                std::cout << "Nb Map Objects  : " << pCurMap->GetNumberMapObjects() << "\n";
-
             double MIN_2D_IOU_THRESH = 0.2;
             double MIN_3D_IOU_THRESH = 0.3;
             int TIME_DIFF_THRESH = 30;
@@ -2720,6 +2796,7 @@ void Tracking::Track()
             if(pCurrentMap->KeyFramesInMap()<=10)
             {
                 mpSystem->ResetActiveMap();
+                finalize_frame_report();
                 return;
             }
             if (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
@@ -2727,11 +2804,13 @@ void Tracking::Track()
                 {
                     Verbose::PrintMess("Track lost before IMU initialisation, reseting...", Verbose::VERBOSITY_QUIET);
                     mpSystem->ResetActiveMap();
+                    finalize_frame_report();
                     return;
                 }
 
             CreateMapInAtlas();
 
+            finalize_frame_report();
             return;
         }
 
@@ -2765,6 +2844,8 @@ void Tracking::Track()
         }
 
     }
+
+    finalize_frame_report();
 
 #ifdef REGISTER_LOOP
     if (Stop()) {
@@ -4566,6 +4647,14 @@ void Tracking::ChangeCalibration(const string &strSettingPath)
     {
         center_reprojection_threshold_px_ = center_reprojection_threshold_node.real();
     }
+    frame_report_interval_ = 10;
+    cv::FileNode frame_report_interval_node = fSettings["Debug.FrameReportInterval"];
+    if(!frame_report_interval_node.empty() && frame_report_interval_node.isInt())
+    {
+        frame_report_interval_ = frame_report_interval_node.operator int();
+    }
+    if(frame_report_interval_ < 0)
+        frame_report_interval_ = 0;
 
     Frame::mbInitialComputations = true;
 }

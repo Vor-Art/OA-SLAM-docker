@@ -488,15 +488,9 @@ void System::Shutdown()
     mpLocalMapper->RequestFinish();
     mpLoopCloser->RequestFinish();
     if (local_object_mapper_) local_object_mapper_->RequestFinish();
-    /*if(mpViewer)
-    {
-        mpViewer->RequestFinish();
-        while(!mpViewer->isFinished())
-            usleep(5000);
-    }*/
-
     if(mpViewer)
     {
+        mpViewer->RequestFinish();
         while(!mpViewer->isFinished())
             usleep(5000);
     }

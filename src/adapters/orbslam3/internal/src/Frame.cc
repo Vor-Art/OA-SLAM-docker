@@ -968,7 +968,7 @@ void Frame::ComputeStereoMatches()
     const float median = vDistIdx[vDistIdx.size()/2].first;
     const float thDist = 1.5f*1.4f*median;
 
-    for(int i=vDistIdx.size()-1;i>=0;i--)
+    for(size_t i=vDistIdx.size()-1;i>=0;i--)
     {
         if(vDistIdx[i].first<thDist)
             break;

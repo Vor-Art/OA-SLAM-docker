@@ -94,6 +94,7 @@ namespace ORB_SLAM3 {
 
         float depthMapFactor() {return depthMapFactor_;}
         float centerReprojectionThresholdPx() {return centerReprojectionThresholdPx_;}
+        int frameReportInterval() {return frameReportInterval_;}
 
         int nFeatures() {return nFeatures_;}
         int nLevels() {return nLevels_;}
@@ -216,6 +217,7 @@ namespace ORB_SLAM3 {
          */
         float depthMapFactor_;
         float centerReprojectionThresholdPx_ = 100.0f;
+        int frameReportInterval_ = 10;
 
         /*
          * ORB stuff
