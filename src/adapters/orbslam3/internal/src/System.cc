@@ -1296,10 +1296,24 @@ int System::GetTrackingState()
     return mTrackingState;
 }
 
+unsigned long System::GetCurrentMapId()
+{
+    unique_lock<mutex> lock(mMutexState);
+    Map* pCurrentMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
+    return pCurrentMap ? pCurrentMap->GetId() : 0;
+}
+
 vector<MapPoint*> System::GetAllMapPoints()
 {
     unique_lock<mutex> lock(mMutexState);
     return mpAtlas ? mpAtlas->GetAllMapPoints() : vector<MapPoint*>{};
+}
+
+vector<MapObject*> System::GetAllMapObjects()
+{
+    unique_lock<mutex> lock(mMutexState);
+    Map* pCurrentMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
+    return pCurrentMap ? pCurrentMap->GetAllMapObjects() : vector<MapObject*>{};
 }
 
 vector<MapPoint*> System::GetTrackedMapPoints()

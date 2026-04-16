@@ -7,6 +7,7 @@
 #include <opencv2/features2d.hpp>
 
 #include "oaslam/core/geometry_types.h"
+#include "oaslam/core/semantic_map_types.h"
 #include "oaslam/core/session_types.h"
 
 namespace oaslam {
@@ -32,6 +33,8 @@ struct TrackingResult {
   bool has_pose = false;
   Transform4d T_world_camera = Transform4d::eye();
   SceneSlice scene;
+  SemanticMapSnapshot semantic_map;
+  SemanticMapDelta semantic_map_delta;
   double relocalization_duration_ms = -1.0;
   bool relocalization_success = false;
   bool imu_initialized = false;

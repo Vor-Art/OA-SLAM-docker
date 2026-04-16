@@ -16,10 +16,19 @@ find_package(image_transport REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(oaslam CONFIG REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
 find_package(rosbag2_storage REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/SemanticObject.msg"
+  "msg/SemanticMapSnapshot.msg"
+  "msg/SemanticMapDelta.msg"
+  DEPENDENCIES geometry_msgs std_msgs
+)
 
 add_library(oaslam_ros2_wrapper_common STATIC
   src/session_config_utils.cpp
@@ -36,7 +45,10 @@ ament_target_dependencies(oaslam_ros2_wrapper_common
   rclcpp
   sensor_msgs
   std_msgs
+  visualization_msgs
 )
+rosidl_target_interfaces(oaslam_ros2_wrapper_common
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 add_executable(oaslam_vio_node
   src/oaslam_vio_node.cpp
@@ -55,7 +67,10 @@ ament_target_dependencies(oaslam_vio_node
   rclcpp
   sensor_msgs
   std_msgs
+  visualization_msgs
 )
+rosidl_target_interfaces(oaslam_vio_node
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 add_executable(oaslam_offline_vio_node
   src/oaslam_offline_vio_node.cpp
@@ -69,11 +84,16 @@ target_link_libraries(oaslam_offline_vio_node
 
 ament_target_dependencies(oaslam_offline_vio_node
   cv_bridge
+  geometry_msgs
   rclcpp
   rosbag2_cpp
   rosbag2_storage
   sensor_msgs
+  std_msgs
+  visualization_msgs
 )
+rosidl_target_interfaces(oaslam_offline_vio_node
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 install(TARGETS oaslam_vio_node oaslam_offline_vio_node
   DESTINATION lib/${PROJECT_NAME}
@@ -84,5 +104,7 @@ install(DIRECTORY
   launch
   DESTINATION share/${PROJECT_NAME}
 )
+
+ament_export_dependencies(rosidl_default_runtime)
 
 ament_package()

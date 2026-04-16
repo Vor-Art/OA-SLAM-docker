@@ -10,8 +10,12 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <opencv2/core/types.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <oaslam_ros2_wrapper/msg/semantic_map_delta.hpp>
+#include <oaslam_ros2_wrapper/msg/semantic_map_snapshot.hpp>
+#include <oaslam_ros2_wrapper/msg/semantic_object.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/header.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include "oaslam/app/slam_session.h"
 #include "oaslam/core/geometry_types.h"
@@ -24,7 +28,12 @@ struct PublisherParams {
   std::string map_points_topic;
   std::string new_map_points_topic;
   std::string visible_map_points_topic;
+  std::string semantic_map_snapshot_topic;
+  std::string semantic_map_delta_topic;
+  std::string semantic_map_markers_topic;
   std::string world_frame_id;
+  std::string agent_id;
+  std::string session_id;
 };
 
 struct SharedTopicParams {
@@ -99,6 +108,24 @@ sensor_msgs::msg::PointCloud2 ToPointCloud2(
     const std_msgs::msg::Header& header,
     const std::string& world_frame_id,
     const std::vector<cv::Point3d>& points);
+
+msg::SemanticObject ToSemanticObjectMsg(
+    const oaslam::SemanticObject& object);
+
+msg::SemanticMapSnapshot ToSemanticMapSnapshotMsg(
+    const std_msgs::msg::Header& header,
+    const PublisherParams& params,
+    const oaslam::SemanticMapSnapshot& snapshot);
+
+msg::SemanticMapDelta ToSemanticMapDeltaMsg(
+    const std_msgs::msg::Header& header,
+    const PublisherParams& params,
+    const oaslam::SemanticMapDelta& delta);
+
+visualization_msgs::msg::MarkerArray ToSemanticMapMarkers(
+    const std_msgs::msg::Header& header,
+    const PublisherParams& params,
+    const oaslam::SemanticMapSnapshot& snapshot);
 
 void WriteTumPoseLine(std::ofstream& output,
                       double timestamp,

@@ -1,18 +1,108 @@
 #include "src/adapters/orbslam3/orbslam3_backend_adapter.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "src/adapters/orbslam3/internal/include/ImageDetections.h"
+#include "src/adapters/orbslam3/internal/include/MapObject.h"
 #include "src/adapters/orbslam3/internal/include/MapPoint.h"
 #include "src/adapters/orbslam3/internal/include/System.h"
 #include "src/adapters/orbslam3/internal/include/Tracking.h"
 #include "src/adapters/orbslam3/orbslam3_pose_utils.h"
 
 namespace oaslam {
+namespace {
+
+Transform4d MakeTransform4d(const Eigen::Matrix3d& rotation,
+                            const Eigen::Vector3d& translation) {
+  Transform4d transform = Transform4d::eye();
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      transform(row, col) = rotation(row, col);
+    }
+    transform(row, 3) = translation(row);
+  }
+  return transform;
+}
+
+SemanticObjectStatus ToSemanticObjectStatus(
+    ORB_SLAM3::ObjectTrackStatus status) {
+  switch (status) {
+    case ORB_SLAM3::ObjectTrackStatus::ONLY_2D:
+      return SemanticObjectStatus::Only2D;
+    case ORB_SLAM3::ObjectTrackStatus::INITIALIZED:
+      return SemanticObjectStatus::Initialized;
+    case ORB_SLAM3::ObjectTrackStatus::IN_MAP:
+      return SemanticObjectStatus::InMap;
+    case ORB_SLAM3::ObjectTrackStatus::BAD:
+    default:
+      return SemanticObjectStatus::Bad;
+  }
+}
+
+SemanticObject ToSemanticObject(const ORB_SLAM3::MapObject& map_object) {
+  const ORB_SLAM3::ObjectTrack* track = map_object.GetTrack();
+  const ORB_SLAM3::Ellipsoid& ellipsoid = map_object.GetEllipsoid();
+
+  SemanticObject object;
+  object.local_object_id = track ? track->GetId() : 0U;
+  object.category_id = track ? track->GetCategoryId() : 0U;
+  object.status = track ? ToSemanticObjectStatus(track->GetStatus())
+                        : SemanticObjectStatus::Bad;
+  object.T_map_object =
+      MakeTransform4d(ellipsoid.GetOrientation(), ellipsoid.GetCenter());
+
+  const Eigen::Vector3d axes = ellipsoid.GetAxes();
+  object.axes = cv::Vec3d(axes(0), axes(1), axes(2));
+  object.observation_count = track ? track->GetNbObservations() : 0U;
+  object.keyframe_observation_count =
+      track ? track->GetNbObservationsInKeyFrame() : 0U;
+  object.last_obs_score = track ? track->GetLastObsScore() : 0.0;
+  object.last_obs_frame_id = track ? track->GetLastObsFrameId() : -1;
+  return object;
+}
+
+bool NearlyEqual(double lhs, double rhs, double tolerance) {
+  return std::abs(lhs - rhs) <= tolerance;
+}
+
+bool SameTransform(const Transform4d& lhs, const Transform4d& rhs,
+                   double tolerance) {
+  for (int row = 0; row < 4; ++row) {
+    for (int col = 0; col < 4; ++col) {
+      if (!NearlyEqual(lhs(row, col), rhs(row, col), tolerance)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool SameSemanticObject(const SemanticObject& lhs, const SemanticObject& rhs) {
+  if (lhs.local_object_id != rhs.local_object_id ||
+      lhs.category_id != rhs.category_id || lhs.status != rhs.status ||
+      lhs.observation_count != rhs.observation_count ||
+      lhs.keyframe_observation_count != rhs.keyframe_observation_count ||
+      lhs.last_obs_frame_id != rhs.last_obs_frame_id) {
+    return false;
+  }
+
+  if (!SameTransform(lhs.T_map_object, rhs.T_map_object, 1e-5) ||
+      !NearlyEqual(lhs.axes[0], rhs.axes[0], 1e-5) ||
+      !NearlyEqual(lhs.axes[1], rhs.axes[1], 1e-5) ||
+      !NearlyEqual(lhs.axes[2], rhs.axes[2], 1e-5) ||
+      !NearlyEqual(lhs.last_obs_score, rhs.last_obs_score, 1e-6)) {
+    return false;
+  }
+
+  return true;
+}
+
+}  // namespace
 
 OrbSlam3BackendAdapter::OrbSlam3BackendAdapter(const std::string& vocab_path,
                                                const std::string& settings_path,
@@ -78,6 +168,65 @@ TrackingResult OrbSlam3BackendAdapter::processFrame(
     result.scene.has_pose = true;
     result.scene.T_world_camera = result.T_world_camera;
   }
+
+  result.semantic_map.sequence = ++semantic_sequence_;
+  result.semantic_map_delta.sequence = semantic_sequence_;
+  result.semantic_map.map_id = system_->GetCurrentMapId();
+  result.semantic_map_delta.map_id = result.semantic_map.map_id;
+
+  if (result.semantic_map.map_id != last_semantic_map_id_) {
+    result.semantic_map_delta.reset = true;
+    last_semantic_objects_.clear();
+    last_semantic_map_id_ = result.semantic_map.map_id;
+  }
+
+  std::unordered_map<unsigned int, SemanticObject> current_semantic_objects;
+  const auto map_objects = system_->GetAllMapObjects();
+  result.semantic_map.objects.reserve(map_objects.size());
+  for (ORB_SLAM3::MapObject* map_object : map_objects) {
+    if (map_object == nullptr || map_object->GetTrack() == nullptr ||
+        map_object->GetTrack()->IsBad()) {
+      continue;
+    }
+
+    SemanticObject semantic_object = ToSemanticObject(*map_object);
+    const unsigned int object_id = semantic_object.local_object_id;
+    result.semantic_map.objects.push_back(semantic_object);
+    current_semantic_objects.emplace(object_id, semantic_object);
+
+    const auto it = last_semantic_objects_.find(object_id);
+    if (it == last_semantic_objects_.end()) {
+      result.semantic_map_delta.added.push_back(semantic_object);
+    } else if (!SameSemanticObject(it->second, semantic_object)) {
+      result.semantic_map_delta.updated.push_back(semantic_object);
+    }
+  }
+
+  for (const auto& previous_entry : last_semantic_objects_) {
+    if (current_semantic_objects.find(previous_entry.first) ==
+        current_semantic_objects.end()) {
+      result.semantic_map_delta.removed_object_ids.push_back(previous_entry.first);
+    }
+  }
+
+  last_semantic_objects_ = std::move(current_semantic_objects);
+
+  std::sort(result.semantic_map.objects.begin(), result.semantic_map.objects.end(),
+            [](const SemanticObject& lhs, const SemanticObject& rhs) {
+              return lhs.local_object_id < rhs.local_object_id;
+            });
+  std::sort(result.semantic_map_delta.added.begin(),
+            result.semantic_map_delta.added.end(),
+            [](const SemanticObject& lhs, const SemanticObject& rhs) {
+              return lhs.local_object_id < rhs.local_object_id;
+            });
+  std::sort(result.semantic_map_delta.updated.begin(),
+            result.semantic_map_delta.updated.end(),
+            [](const SemanticObject& lhs, const SemanticObject& rhs) {
+              return lhs.local_object_id < rhs.local_object_id;
+            });
+  std::sort(result.semantic_map_delta.removed_object_ids.begin(),
+            result.semantic_map_delta.removed_object_ids.end());
 
   // Extract tracked map points and keypoints
   const auto map_points = system_->GetAllMapPoints();
@@ -153,6 +302,9 @@ void OrbSlam3BackendAdapter::reset() {
   if (system_) {
     system_->ResetActiveMap();
   }
+  last_semantic_objects_.clear();
+  last_semantic_map_id_ = 0;
+  semantic_sequence_ = 0;
   seen_map_point_ids_.clear();
 }
 
@@ -163,6 +315,9 @@ void OrbSlam3BackendAdapter::shutdown() {
   if (system_) {
     system_->Shutdown();
   }
+  last_semantic_objects_.clear();
+  last_semantic_map_id_ = 0;
+  semantic_sequence_ = 0;
   seen_map_point_ids_.clear();
   shutdown_called_ = true;
 }

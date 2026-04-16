@@ -103,6 +103,17 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     visible_map_points_publisher_ =
         create_publisher<sensor_msgs::msg::PointCloud2>(
             topics_.publisher.visible_map_points_topic, 10);
+    semantic_map_snapshot_publisher_ =
+        create_publisher<oaslam_ros2_wrapper::msg::SemanticMapSnapshot>(
+            topics_.publisher.semantic_map_snapshot_topic,
+            rclcpp::QoS(1).reliable().transient_local());
+    semantic_map_delta_publisher_ =
+        create_publisher<oaslam_ros2_wrapper::msg::SemanticMapDelta>(
+            topics_.publisher.semantic_map_delta_topic, 10);
+    semantic_map_markers_publisher_ =
+        create_publisher<visualization_msgs::msg::MarkerArray>(
+            topics_.publisher.semantic_map_markers_topic,
+            rclcpp::QoS(1).reliable().transient_local());
 
     oaslam_ros2_wrapper::LogNodeStartup(
         get_logger(), "offline VIO", runtime_.session_params,
@@ -114,7 +125,12 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
          {"Map points topic", topics_.publisher.map_points_topic},
          {"New map points topic", topics_.publisher.new_map_points_topic},
          {"Visible map points topic", topics_.publisher.visible_map_points_topic},
+         {"Semantic snapshot topic", topics_.publisher.semantic_map_snapshot_topic},
+         {"Semantic delta topic", topics_.publisher.semantic_map_delta_topic},
+         {"Semantic markers topic", topics_.publisher.semantic_map_markers_topic},
          {"World frame", topics_.publisher.world_frame_id},
+         {"Agent ID", topics_.publisher.agent_id},
+         {"Session ID", topics_.publisher.session_id},
          {"Camera ID", topics_.shared.camera_id},
          {"Output folder", runtime_.session_params.output_folder}});
   }
@@ -427,6 +443,10 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         const auto result = runtime_.session->processFrame(frame);
         total_frames_processed++;
 
+        if (!shutdown_requested_->load() && rclcpp::ok()) {
+          PublishSemanticMap(rgb_msg->header, result.tracking);
+        }
+
         // ── 12. Write trajectory line (ALWAYS — 1:1 with RGB images) ──
         if (result.tracking.has_pose) {
           total_poses_obtained++;
@@ -511,6 +531,23 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
   }
 
  private:
+  void PublishSemanticMap(const std_msgs::msg::Header& header,
+                          const oaslam::TrackingResult& tracking) {
+    if (tracking.semantic_map_delta.empty()) {
+      return;
+    }
+
+    semantic_map_snapshot_publisher_->publish(
+        oaslam_ros2_wrapper::ToSemanticMapSnapshotMsg(
+            header, topics_.publisher, tracking.semantic_map));
+    semantic_map_delta_publisher_->publish(
+        oaslam_ros2_wrapper::ToSemanticMapDeltaMsg(
+            header, topics_.publisher, tracking.semantic_map_delta));
+    semantic_map_markers_publisher_->publish(
+        oaslam_ros2_wrapper::ToSemanticMapMarkers(
+            header, topics_.publisher, tracking.semantic_map));
+  }
+
   oaslam_ros2_wrapper::NodeRuntime runtime_;
   oaslam_ros2_wrapper::OfflineTopicParams topics_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher_;
@@ -519,6 +556,12 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       new_map_points_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       visible_map_points_publisher_;
+  rclcpp::Publisher<oaslam_ros2_wrapper::msg::SemanticMapSnapshot>::SharedPtr
+      semantic_map_snapshot_publisher_;
+  rclcpp::Publisher<oaslam_ros2_wrapper::msg::SemanticMapDelta>::SharedPtr
+      semantic_map_delta_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+      semantic_map_markers_publisher_;
   std::shared_ptr<std::atomic<bool>> shutdown_requested_ =
       std::make_shared<std::atomic<bool>>(false);
 };

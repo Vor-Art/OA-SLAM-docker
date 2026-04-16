@@ -102,6 +102,7 @@ class LocalObjectMapping;
 class LoopClosing;
 class Settings;
 class Detection;
+class MapObject;
 
 
 enum enumRelocalizationMode {
@@ -198,7 +199,9 @@ public:
     // Information from most recent processed frame
     // You can call this right after TrackMonocular (or stereo or RGBD)
     int GetTrackingState();
+    unsigned long GetCurrentMapId();
     std::vector<MapPoint*> GetAllMapPoints();
+    std::vector<MapObject*> GetAllMapObjects();
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
 

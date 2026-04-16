@@ -3,9 +3,11 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include "oaslam/core/semantic_map_types.h"
 #include "oaslam/core/session_types.h"
 #include "oaslam/ports/slam_backend.h"
 
@@ -46,7 +48,10 @@ class OrbSlam3BackendAdapter final : public ISlamBackend {
       const std::vector<Detection2D>& detections) const;
 
   std::unique_ptr<ORB_SLAM3::System> system_;
+  std::unordered_map<unsigned int, SemanticObject> last_semantic_objects_;
   std::unordered_set<unsigned long> seen_map_point_ids_;
+  unsigned long last_semantic_map_id_ = 0;
+  std::uint64_t semantic_sequence_ = 0;
   bool use_imu_ = false;
   bool shutdown_called_ = false;
 };

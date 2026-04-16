@@ -1,0 +1,9 @@
+std_msgs/Header header
+string agent_id
+string session_id
+uint64 map_id
+uint64 sequence
+bool reset
+SemanticObject[] added
+SemanticObject[] updated
+uint32[] removed_object_ids

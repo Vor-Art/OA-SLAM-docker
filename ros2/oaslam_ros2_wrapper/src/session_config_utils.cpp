@@ -2,16 +2,21 @@
 
 #include <Eigen/Geometry>
 
+#include <algorithm>
+#include <array>
 #include <chrono>
+#include <cmath>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
 #include <vector>
 
+#include <geometry_msgs/msg/point.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 
 namespace oaslam_ros2_wrapper {
@@ -22,9 +27,150 @@ constexpr char kDefaultCameraSettingsFile[] =
     "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/d435i_imu_rgbd.yaml";
 constexpr int kMaxKeyframeQueueDepth = 2;
 constexpr auto kBackpressureSleep = std::chrono::microseconds(50);
+constexpr double kMinSemanticAxis = 1e-3;
+constexpr double kMinMarkerAxisScale = 0.05;
+constexpr double kMinAxisLineWidth = 0.02;
+constexpr double kMinLabelHeight = 0.18;
+
+constexpr std::array<std::array<float, 3>, 10> kSemanticPalette{{
+    {{0.11F, 0.47F, 0.71F}},  // blue
+    {{1.00F, 0.50F, 0.05F}},  // orange
+    {{0.17F, 0.63F, 0.17F}},  // green
+    {{0.84F, 0.15F, 0.16F}},  // red
+    {{0.58F, 0.40F, 0.74F}},  // violet
+    {{0.55F, 0.34F, 0.29F}},  // brown
+    {{0.89F, 0.47F, 0.76F}},  // pink
+    {{0.50F, 0.50F, 0.50F}},  // gray
+    {{0.74F, 0.74F, 0.13F}},  // olive
+    {{0.09F, 0.75F, 0.81F}},  // cyan
+}};
 
 const char* BoolFlag(bool value) {
   return value ? "on" : "off";
+}
+
+std_msgs::msg::ColorRGBA MakeColor(float r, float g, float b, float a) {
+  std_msgs::msg::ColorRGBA color;
+  color.r = r;
+  color.g = g;
+  color.b = b;
+  color.a = a;
+  return color;
+}
+
+std_msgs::msg::ColorRGBA TintColor(const std_msgs::msg::ColorRGBA& base,
+                                   float tint_mix,
+                                   float alpha) {
+  const float clamped_mix = std::min(std::max(tint_mix, 0.0F), 1.0F);
+  return MakeColor(base.r + (1.0F - base.r) * clamped_mix,
+                   base.g + (1.0F - base.g) * clamped_mix,
+                   base.b + (1.0F - base.b) * clamped_mix,
+                   alpha);
+}
+
+std_msgs::msg::ColorRGBA SemanticObjectColor(
+    const oaslam::SemanticObject& object) {
+  const auto& rgb = kSemanticPalette[object.category_id % kSemanticPalette.size()];
+  std_msgs::msg::ColorRGBA color = MakeColor(rgb[0], rgb[1], rgb[2], 0.38F);
+  switch (object.status) {
+    case oaslam::SemanticObjectStatus::InMap:
+      color.a = 0.38F;
+      break;
+    case oaslam::SemanticObjectStatus::Initialized:
+      color = TintColor(color, 0.18F, 0.24F);
+      break;
+    case oaslam::SemanticObjectStatus::Only2D:
+      color = TintColor(color, 0.35F, 0.16F);
+      break;
+    case oaslam::SemanticObjectStatus::Bad:
+    default:
+      color = MakeColor(0.85F, 0.15F, 0.15F, 0.20F);
+      break;
+  }
+  return color;
+}
+
+float AxisAlphaForStatus(oaslam::SemanticObjectStatus status) {
+  switch (status) {
+    case oaslam::SemanticObjectStatus::InMap:
+      return 0.95F;
+    case oaslam::SemanticObjectStatus::Initialized:
+      return 0.80F;
+    case oaslam::SemanticObjectStatus::Only2D:
+      return 0.60F;
+    case oaslam::SemanticObjectStatus::Bad:
+    default:
+      return 0.45F;
+  }
+}
+
+const char* SemanticStatusText(oaslam::SemanticObjectStatus status) {
+  switch (status) {
+    case oaslam::SemanticObjectStatus::Only2D:
+      return "only_2d";
+    case oaslam::SemanticObjectStatus::Initialized:
+      return "initialized";
+    case oaslam::SemanticObjectStatus::InMap:
+      return "in_map";
+    case oaslam::SemanticObjectStatus::Bad:
+    default:
+      return "bad";
+  }
+}
+
+bool IsRenderableSemanticObject(const oaslam::SemanticObject& object) {
+  for (int row = 0; row < 4; ++row) {
+    for (int col = 0; col < 4; ++col) {
+      if (!std::isfinite(object.T_map_object(row, col))) {
+        return false;
+      }
+    }
+  }
+
+  return std::isfinite(object.axes[0]) && std::isfinite(object.axes[1]) &&
+         std::isfinite(object.axes[2]) &&
+         std::max({object.axes[0], object.axes[1], object.axes[2]}) >
+             kMinSemanticAxis;
+}
+
+double MaxSemanticAxis(const oaslam::SemanticObject& object) {
+  return std::max({object.axes[0], object.axes[1], object.axes[2]});
+}
+
+std_msgs::msg::Header MarkerHeader(const std_msgs::msg::Header& header,
+                                   const PublisherParams& params) {
+  std_msgs::msg::Header marker_header = header;
+  marker_header.frame_id = params.world_frame_id;
+  return marker_header;
+}
+
+int32_t MarkerId(std::uint32_t local_object_id) {
+  return static_cast<int32_t>(
+      std::min<std::uint32_t>(local_object_id,
+                              static_cast<std::uint32_t>(
+                                  std::numeric_limits<int32_t>::max())));
+}
+
+geometry_msgs::msg::Point ToPoint(double x, double y, double z) {
+  geometry_msgs::msg::Point point;
+  point.x = x;
+  point.y = y;
+  point.z = z;
+  return point;
+}
+
+geometry_msgs::msg::Point ToPoint(const Eigen::Vector3d& value) {
+  return ToPoint(value.x(), value.y(), value.z());
+}
+
+Eigen::Matrix3d RotationFromTransform(const oaslam::Transform4d& transform) {
+  Eigen::Matrix3d rotation;
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      rotation(row, col) = transform(row, col);
+    }
+  }
+  return rotation;
 }
 
 std::string FormatCurrentLocalTimestamp() {
@@ -37,6 +183,10 @@ std::string FormatCurrentLocalTimestamp() {
   std::ostringstream stream;
   stream << std::put_time(&local_time, "%Y%m%d_%H%M%S");
   return stream.str();
+}
+
+std::string DefaultSessionId(const rclcpp::Node& node) {
+  return std::string(node.get_name()) + "_" + FormatCurrentLocalTimestamp();
 }
 
 std::string ResolveOutputFolder(const std::string& output_folder) {
@@ -136,8 +286,21 @@ OnlineTopicParams DeclareOnlineTopicParameters(rclcpp::Node& node) {
   params.publisher.visible_map_points_topic =
       node.declare_parameter<std::string>(
           "visible_map_points_topic", "/oaslam/visible_map_points");
+  params.publisher.semantic_map_snapshot_topic =
+      node.declare_parameter<std::string>(
+          "semantic_map_snapshot_topic", "/oaslam/semantic_map_snapshot");
+  params.publisher.semantic_map_delta_topic = node.declare_parameter<std::string>(
+      "semantic_map_delta_topic", "/oaslam/semantic_map_delta");
+  params.publisher.semantic_map_markers_topic = node.declare_parameter<std::string>(
+      "semantic_map_markers_topic", "/oaslam/semantic_map_markers");
   params.publisher.world_frame_id =
       node.declare_parameter<std::string>("world_frame_id", "map");
+  params.publisher.agent_id = node.declare_parameter<std::string>(
+      "agent_id",
+      params.shared.camera_id.empty() ? std::string("agent0")
+                                      : params.shared.camera_id);
+  params.publisher.session_id = node.declare_parameter<std::string>(
+      "session_id", DefaultSessionId(node));
   return params;
 }
 
@@ -153,8 +316,21 @@ OfflineTopicParams DeclareOfflineTopicParameters(rclcpp::Node& node) {
   params.publisher.visible_map_points_topic =
       node.declare_parameter<std::string>(
           "visible_map_points_topic", "/oaslam/visible_map_points");
+  params.publisher.semantic_map_snapshot_topic =
+      node.declare_parameter<std::string>(
+          "semantic_map_snapshot_topic", "/oaslam/semantic_map_snapshot");
+  params.publisher.semantic_map_delta_topic = node.declare_parameter<std::string>(
+      "semantic_map_delta_topic", "/oaslam/semantic_map_delta");
+  params.publisher.semantic_map_markers_topic = node.declare_parameter<std::string>(
+      "semantic_map_markers_topic", "/oaslam/semantic_map_markers");
   params.publisher.world_frame_id =
       node.declare_parameter<std::string>("world_frame_id", "map");
+  params.publisher.agent_id = node.declare_parameter<std::string>(
+      "agent_id",
+      params.shared.camera_id.empty() ? std::string("agent0")
+                                      : params.shared.camera_id);
+  params.publisher.session_id = node.declare_parameter<std::string>(
+      "session_id", DefaultSessionId(node));
   params.bag_path = node.declare_parameter<std::string>("bag_path", "");
   if (params.bag_path.empty()) {
     throw std::runtime_error(
@@ -340,6 +516,28 @@ geometry_msgs::msg::PoseStamped ToPoseStamped(
   return pose;
 }
 
+geometry_msgs::msg::Pose ToPose(const oaslam::Transform4d& transform) {
+  geometry_msgs::msg::Pose pose;
+  pose.position.x = transform(0, 3);
+  pose.position.y = transform(1, 3);
+  pose.position.z = transform(2, 3);
+
+  Eigen::Matrix3d rotation;
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      rotation(row, col) = transform(row, col);
+    }
+  }
+
+  Eigen::Quaterniond quaternion(rotation);
+  quaternion.normalize();
+  pose.orientation.x = quaternion.x();
+  pose.orientation.y = quaternion.y();
+  pose.orientation.z = quaternion.z();
+  pose.orientation.w = quaternion.w();
+  return pose;
+}
+
 sensor_msgs::msg::PointCloud2 ToPointCloud2(
     const std_msgs::msg::Header& header,
     const std::string& world_frame_id,
@@ -365,6 +563,161 @@ sensor_msgs::msg::PointCloud2 ToPointCloud2(
   }
 
   return cloud;
+}
+
+msg::SemanticObject ToSemanticObjectMsg(
+    const oaslam::SemanticObject& object) {
+  msg::SemanticObject message;
+  message.local_object_id = object.local_object_id;
+  message.category_id = object.category_id;
+  message.status = static_cast<std::uint8_t>(object.status);
+  message.pose = ToPose(object.T_map_object);
+  message.axes.x = object.axes[0];
+  message.axes.y = object.axes[1];
+  message.axes.z = object.axes[2];
+  message.observation_count = object.observation_count;
+  message.keyframe_observation_count = object.keyframe_observation_count;
+  message.last_obs_score = object.last_obs_score;
+  message.last_obs_frame_id = object.last_obs_frame_id;
+  return message;
+}
+
+msg::SemanticMapSnapshot ToSemanticMapSnapshotMsg(
+    const std_msgs::msg::Header& header,
+    const PublisherParams& params,
+    const oaslam::SemanticMapSnapshot& snapshot) {
+  msg::SemanticMapSnapshot message;
+  message.header = header;
+  message.header.frame_id = params.world_frame_id;
+  message.agent_id = params.agent_id;
+  message.session_id = params.session_id;
+  message.map_id = snapshot.map_id;
+  message.sequence = snapshot.sequence;
+  message.objects.reserve(snapshot.objects.size());
+  for (const auto& object : snapshot.objects) {
+    message.objects.push_back(ToSemanticObjectMsg(object));
+  }
+  return message;
+}
+
+msg::SemanticMapDelta ToSemanticMapDeltaMsg(
+    const std_msgs::msg::Header& header,
+    const PublisherParams& params,
+    const oaslam::SemanticMapDelta& delta) {
+  msg::SemanticMapDelta message;
+  message.header = header;
+  message.header.frame_id = params.world_frame_id;
+  message.agent_id = params.agent_id;
+  message.session_id = params.session_id;
+  message.map_id = delta.map_id;
+  message.sequence = delta.sequence;
+  message.reset = delta.reset;
+  message.added.reserve(delta.added.size());
+  for (const auto& object : delta.added) {
+    message.added.push_back(ToSemanticObjectMsg(object));
+  }
+  message.updated.reserve(delta.updated.size());
+  for (const auto& object : delta.updated) {
+    message.updated.push_back(ToSemanticObjectMsg(object));
+  }
+  message.removed_object_ids = delta.removed_object_ids;
+  return message;
+}
+
+visualization_msgs::msg::MarkerArray ToSemanticMapMarkers(
+    const std_msgs::msg::Header& header,
+    const PublisherParams& params,
+    const oaslam::SemanticMapSnapshot& snapshot) {
+  visualization_msgs::msg::MarkerArray markers;
+  const std_msgs::msg::Header marker_header = MarkerHeader(header, params);
+
+  visualization_msgs::msg::Marker clear_marker;
+  clear_marker.header = marker_header;
+  clear_marker.ns = "semantic_map";
+  clear_marker.id = 0;
+  clear_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+  markers.markers.push_back(clear_marker);
+
+  for (const auto& object : snapshot.objects) {
+    if (!IsRenderableSemanticObject(object)) {
+      continue;
+    }
+
+    const int32_t marker_id = MarkerId(object.local_object_id);
+    const double max_axis = MaxSemanticAxis(object);
+    const std_msgs::msg::ColorRGBA object_color = SemanticObjectColor(object);
+
+    visualization_msgs::msg::Marker ellipsoid_marker;
+    ellipsoid_marker.header = marker_header;
+    ellipsoid_marker.ns = "semantic_map/ellipsoids";
+    ellipsoid_marker.id = marker_id;
+    ellipsoid_marker.type = visualization_msgs::msg::Marker::SPHERE;
+    ellipsoid_marker.action = visualization_msgs::msg::Marker::ADD;
+    ellipsoid_marker.pose = ToPose(object.T_map_object);
+    ellipsoid_marker.scale.x = std::max(object.axes[0] * 2.0, kMinMarkerAxisScale);
+    ellipsoid_marker.scale.y = std::max(object.axes[1] * 2.0, kMinMarkerAxisScale);
+    ellipsoid_marker.scale.z = std::max(object.axes[2] * 2.0, kMinMarkerAxisScale);
+    ellipsoid_marker.color = object_color;
+    markers.markers.push_back(ellipsoid_marker);
+
+    visualization_msgs::msg::Marker axes_marker;
+    axes_marker.header = marker_header;
+    axes_marker.ns = "semantic_map/axes";
+    axes_marker.id = marker_id;
+    axes_marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+    axes_marker.action = visualization_msgs::msg::Marker::ADD;
+    axes_marker.pose.orientation.w = 1.0;
+    axes_marker.scale.x = std::max(kMinAxisLineWidth, max_axis * 0.08);
+
+    const Eigen::Matrix3d rotation = RotationFromTransform(object.T_map_object);
+    const Eigen::Vector3d center(object.T_map_object(0, 3),
+                                 object.T_map_object(1, 3),
+                                 object.T_map_object(2, 3));
+    const std::array<Eigen::Vector3d, 3> local_axes{
+        Eigen::Vector3d(object.axes[0], 0.0, 0.0),
+        Eigen::Vector3d(0.0, object.axes[1], 0.0),
+        Eigen::Vector3d(0.0, 0.0, object.axes[2]),
+    };
+    const float axis_alpha = AxisAlphaForStatus(object.status);
+    const std::array<std_msgs::msg::ColorRGBA, 3> axis_colors{
+        MakeColor(0.95F, 0.25F, 0.25F, axis_alpha),
+        MakeColor(0.20F, 0.85F, 0.35F, axis_alpha),
+        MakeColor(0.25F, 0.55F, 0.98F, axis_alpha),
+    };
+
+    axes_marker.points.reserve(6);
+    axes_marker.colors.reserve(6);
+    for (size_t axis_index = 0; axis_index < local_axes.size(); ++axis_index) {
+      const Eigen::Vector3d world_axis = rotation * local_axes[axis_index];
+      axes_marker.points.push_back(ToPoint(center - world_axis));
+      axes_marker.points.push_back(ToPoint(center + world_axis));
+      axes_marker.colors.push_back(axis_colors[axis_index]);
+      axes_marker.colors.push_back(axis_colors[axis_index]);
+    }
+    markers.markers.push_back(axes_marker);
+
+    visualization_msgs::msg::Marker label_marker;
+    label_marker.header = marker_header;
+    label_marker.ns = "semantic_map/labels";
+    label_marker.id = marker_id;
+    label_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+    label_marker.action = visualization_msgs::msg::Marker::ADD;
+    label_marker.pose.position = ToPoint(center.x(), center.y(),
+                                         center.z() + max_axis + 0.20);
+    label_marker.pose.orientation.w = 1.0;
+    label_marker.scale.z = std::max(kMinLabelHeight, max_axis * 0.35);
+    label_marker.color = TintColor(object_color, 0.72F, 0.96F);
+
+    std::ostringstream text;
+    text << "#" << object.local_object_id
+         << " cat:" << object.category_id
+         << " " << SemanticStatusText(object.status)
+         << " obs:" << object.observation_count;
+    label_marker.text = text.str();
+    markers.markers.push_back(label_marker);
+  }
+
+  return markers;
 }
 
 void WriteTumPoseLine(std::ofstream& output,
