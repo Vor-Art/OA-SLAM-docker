@@ -1,162 +1,115 @@
-# ORB-SLAM2
+# ScoutSLAM
 
-**Associated Publication:**
-- **OA-SLAM: Leveraging Objects for Camera Relocalization in Visual SLAM.** Matthieu Zins, Gilles Simon, Marie-Odile Berger, *IEEE International Symposium on Mixed and Augmented Reality (ISMAR 2022).* [Paper](https://arxiv.org/abs/2209.08338) | [Video](https://youtu.be/L1HEL4kLJ3g) | [AR Demo](https://youtu.be/PXG_6LkbtgY)
+ScoutSLAM is an object-aided visual SLAM codebase built around an ORB-SLAM3
+backend, reusable C++ session modules, and a ROS 2 Humble wrapper for RGB-D /
+VIO-style online and offline runs.
 
-- **Object-Aided SLAM in a World of Objects**, *Demo CVPR 2023*
+This repository currently uses Docker as the supported development and runtime
+environment.
 
+## Requirements
 
-<p align="center">
-<a href="https://youtu.be/PXG_6LkbtgY"> <img src="Doc/OA-SLAM_AR_demo.png" width="640"> </a>
-</p>
+- Docker with Compose v2.
+- NVIDIA driver and NVIDIA Container Toolkit for GPU/CUDA execution.
+- X11 access if `use_viewer: true` is enabled in the ROS 2 parameters.
 
+The image defaults are configured in `docker/.env`:
 
-
-<p align="center">
-<img src="Doc/OA-SLAM.png" width="640">
-</p>
-
-
-
-<p align="center">
-<a href="https://youtu.be/L1HEL4kLJ3g"> <img src="Doc/OA-SLAM_video.png" width="640"> </a>
-</p>
-
-
-# Installation
-
-## Dependencies
-
-- [Pangolin](https://github.com/stevenlovegrove/Pangolin) for visualization and user interface.
-- [OpenCV](http://opencv.org) to manipulate images and features. Version >= 4 is required for live object detection. (tested with 4.6)
-- [Eigen3](https://gitlab.com/libeigen/eigen) for linear algebra.
-- [Dlib](https://github.com/davisking/dlib) for the Hungarian algorithm.
-
-Included in the *Thirdparty* folder:
-- [DBoW2](https://github.com/dorian3d/DBoW2) for place recognition.
-- [g2o](https://github.com/RainerKuemmerle/g2o) for graph-based non-linear optimization.
-
-## Building
-
-Clone the repository recursively:
-```
-git clone https://gitlab.inria.fr/tangram/oa-slam OA-SLAM --recursive
+```env
+CUDA_VERSION=11.8.0
+CUDNN_FLAVOR=cudnn8
+UBUNTU_VERSION=22.04
+OPENCV_VERSION=4.6.0
+ROS_DISTRO=humble
+CUDA_ARCH_BIN=7.5
 ```
 
-Build OA-SLAM:
-```
-docker compose -f docker/docker-compose.yml build
-```
+## Quick Start
 
+From the repository root:
 
-
-
-
-# Data
-
-
-Some test sequences are available in the [TUM-RGB dataset](https://vision.in.tum.de/data/datasets/rgbd-dataset).
-In particular, we use the *fr2/desk* scene.
-
-Sample data of our custom scenes are available at: [https://dorel.univ-lorraine.fr/dataset.xhtml?persistentId=doi%3A10.12763%2F2CZWJP](https://dorel.univ-lorraine.fr/dataset.xhtml?persistentId=doi%3A10.12763%2F2CZWJP)
-
-
-Our system takes object detections as input. We provide detections in JSON files for the sample data and for *fr2/desk* in the *Data* folder. They can be obtained from any object detector.
-We used an off-the-shelf version of [YOLOv5](https://github.com/ultralytics/yolov5) for our custom scene and a fine-tuned version for *fr2/desk*.
-
-The camera parameters for the sample data are available in *Cameras/MI9T_640x360_0.6.yaml*.
-The parameters for *fr2/desk* are in *Cameras/TUM2.yaml*.
-
-# SLAM mode
-
-OA-SLAM includes a map viewer, an image viewer and a AR viewer.
-
-Usage:
-```
- ./oa-slam
-      vocabulary_file
-      camera_file
-      path_to_image_sequence (.txt file listing the images or a folder with rgb.txt or 'webcam_id')
-      detections_file (.json file with detections or .onnx yolov5 weights)
-      categories_to_ignore_file (file containing the categories to ignore (one category_id per line))
-      relocalization_mode ('points', 'objects' or 'points+objects')
-      output_name  
+```bash
+./docker/run.sh build
+./docker/run.sh start
+./docker/run.sh rebuild
 ```
 
+What these commands do:
 
-Example to run OA-SLAM on the scene *Table*:
+- `build` builds the Docker image.
+- `start` starts the long-running `scoutslam` container with the repository.
+- `rebuild` builds and installs the C++ ScoutSLAM libraries, then builds the ROS 2 workspace inside the container.
 
-```
-./oa-slam ../Vocabulary/ORBvoc.txt ../Cameras/MI9T_640x360_0.6.yaml ../Data/sink_21/frames/ ../Data/detections_yolov5_sink_21.json null points+objects sink
-```
+For viewer windows, allow the container to use the host X server before running:
 
-
-Example to run OA-SLAM on the scene *Sink*:
-
-```
-./oa-slam ../Vocabulary/ORBvoc.txt ../Cameras/MI9T_640x360_0.6.yaml ../Data/sink_21/frames/ ../Data/detections_yolov5_sink_21.json null points+objects sink
+```bash
+xhost +local:root
 ```
 
+## ROS 2 Online Run
 
-Example to run OA-SLAM on the scene *fr2/desk*:
-```
-./oa-slam ../Vocabulary/ORBvoc.txt ../Cameras/TUM2.yaml ../Data/rgbd_dataset_freiburg2_desk/rgb.txt ../Data/detections_yolov5_tum_rgbd_fr2_desk.json null points+objects fr2
-```
+The online node subscribes to RGB, depth, and IMU topics and publishes pose,
+map point, semantic map, and marker outputs.
 
-## Live mode
+Default config:
 
-It is possible to run OA-SLAM live using a webcam and YOLOv5. Trained weights are available at: [https://dorel.univ-lorraine.fr/dataset.xhtml?persistentId=doi%3A10.12763%2F2CZWJP](https://dorel.univ-lorraine.fr/dataset.xhtml?persistentId=doi%3A10.12763%2F2CZWJP)
-
-These weights are either trained on COCO dataset or fine-tuned on our statutes and museum objects. Models for image size 640 and 320 are available.
-
-```
-./oa-slam ../Vocabulary/ORBvoc.txt ../Cameras/TUM2.yaml webcam_X yolov5_weights.onnx ../Data/ignore_statues_parts.txt points+objects output_folder
+```bash
+./docker/run.sh run-online
 ```
 
-In ```webcam_X``` replace **X** by webcam id. YOLOv5 weights are in ONNX format. You can convert PyTorch weights into ONNX format using the ```export.py``` script in [YOLOv5](https://github.com/ultralytics/yolov5).
+Run with a custom parameter file inside the container:
 
-In OA-SLAM, YOLOv5 expects images of size 320 x 320. Original size (640 x 640) can be used by modifying ```src/adapters/orbslam2/internal/src/ImageDetections.cc```.
-
-
-
-# Docker
-
-You can build a docker image containing all you need to run OA-SLAM using ```Dockerfile```.
-
-You may need to adapt the base image (```Dockerfile:1```) depending on your cuda drivers version.
-
-
-```nvidia-container-toolkit``` is needed:
-```
-curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-curl -s -L https://nvidia.github.io/nvidia-docker/UBUNTU_VERSION/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
-
-sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-sudo systemctl restart docker
+```bash
+./docker/run.sh run-online /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/online_vio.yaml
 ```
 
-Replace ```UBUNTU_VERSION``` by your version (for example ```ubuntu18.04```).
+## ROS 2 Offline Run
 
-Build the image:
-```
-docker build -t oa-slam .
-```
+The offline node reads a ROS 2 bag directory directly and processes messages sequentially without requiring `ros2 bag play`.
 
-Run the docker:
-```
-sudo xhost +local:root && docker run --gpus all --rm -e DISPLAY=$DISPLAY -v path/to/folder/with/trained_yolov5_in_onnx:/data/ -v /tmp/.X11-unix:/tmp/.X11-unix -v /dev:/dev:ro --device=/dev/video4:/dev/video4 -it oa-slam 
+Default config:
+
+```bash
+./docker/run.sh run-offline
 ```
 
-Note that you need indicate a folder containing the trained weights for YOLOv5 detector in ONNX format. 
-Also, you might have to change the id of the video device.
+To run another bag, edit `bag_path` in a parameter file under `ros2/` or `Data/`
+and pass that container path:
 
-OA-SLAM executables are built in the folder ```/opt/OA-SLAM/bin```.
+```bash
+./docker/run.sh run-offline /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/offline_vio.yaml
+```
 
+The bag must contain the configured RGB and depth topics. The IMU topic is read
+when available; if it is missing, the offline node logs a warning and continues.
 
+## Data, Models, and Outputs
 
+The current checked-in data layout includes:
 
-# License
+- `Data/yolov5m_640x480.onnx` - default ONNX object detector path used by the
+  sample parameter files.
+- `Data/run/` - trajectory output directory.
+- `Data/rviz_cfg.rviz` - RViz configuration.
 
-OA-SLAM is released under a GPLv3 license. The code is based on [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2).
+## Important parameters
 
+Important parameters:
 
+- `rgb_topic`, `depth_topic`, `imu_topic` - input topics.
+- `pose_topic`, `map_points_topic`, `semantic_map_*` - output topics.
+- `vocabulary_file` - usually `/opt/ScoutSLAM/Vocabulary/ORBvoc.txt`.
+- `camera_settings_file` - camera/ORB-SLAM settings YAML.
+- `observation_mode` - `onnx`, `file`, or `none`.
+- `detection_model_path` - required when `observation_mode: "onnx"`.
+- `detection_file_path` - required when `observation_mode: "file"`.
+- `ignored_categories_file` - optional category ignore list.
+- `relocalization_mode` - `points`, `objects`, or `points_and_objects`.
+- `use_viewer` - enables Pangolin viewer windows.
+- `use_imu` - enables IMU use in the SLAM backend.
+- `output_folder` - base folder for timestamped TUM trajectory outputs.
+
+## License
+
+ScoutSLAM is released under GPLv3. The codebase derives from ScoutSLAM, ORB-SLAM2, and ORB-SLAM3 components; see `LICENSE` and bundled third-party directories for
+details.
