@@ -8,6 +8,9 @@ oaslam_vio_node:
     # Publishers
     pose_topic: "/oa_slam/camera_pose"
     world_frame_id: "map"
+    agent_id: "agent_1"
+    local_semantic_map_snapshot_topic: "/agent_1/semantic_map_snapshot"
+    local_semantic_map_delta_topic: "/agent_1/semantic_map_delta"
 
     # SLAM Backend
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"

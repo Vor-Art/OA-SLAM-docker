@@ -1,0 +1,136 @@
+%YAML:1.0
+---
+
+#--------------------------------------------------------------------------------------------
+# System Parameters
+#--------------------------------------------------------------------------------------------
+File.version: "1.0"
+Camera.type: "PinHole"
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters: record_dataset_1 RGB stream
+#--------------------------------------------------------------------------------------------
+# Source: /drone/camera/color/camera_info in Data/record_dataset_1.
+Camera.fx: 605.194580078125
+Camera.fy: 604.2938232421875
+Camera.cx: 313.7639465332031
+Camera.cy: 238.30349731445312
+
+Camera.k1: 0.0
+Camera.k2: 0.0
+Camera.k3: 0.0
+Camera.k4: 0.0
+Camera.p1: 0.0
+Camera.p2: 0.0
+
+Camera.width: 640
+Camera.height: 480
+Camera.fps: 30
+# The bag stores rgb8, but the ROS 2 wrapper converts RGB input to bgr8 before
+# passing frames to ORB-SLAM3.
+Camera.RGB: 0  # Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
+
+#--------------------------------------------------------------------------------------------
+# Detector Parameters
+#--------------------------------------------------------------------------------------------
+Model.width: 640
+Model.height: 480
+
+# # Save per-frame detections in OA-SLAM JSON format (0/1 or false/true).
+# save_detections: 1
+Detector.CenterReprojectionThresholdPx: 50.0
+
+#--------------------------------------------------------------------------------------------
+# Debug Parameters
+#--------------------------------------------------------------------------------------------
+# Emit a compact object-tracking report every N frames. Set to 0 to disable.
+Debug.FrameReportInterval: 10
+
+#--------------------------------------------------------------------------------------------
+# Depth Parameters
+#--------------------------------------------------------------------------------------------
+# Source depth topic: /drone/camera/depth/image_rect_raw.
+# Encoding is 16UC1 in millimeters. ORB-SLAM3 expects meters.
+Depth.MapFactor: 1000.0
+
+# The recorded depth stream is not registered to the color stream natively.
+# The record_dataset_1 ROS parameter files enable wrapper-side registration
+# using the intrinsics and depth_to_color extrinsics below.
+#
+# Depth intrinsics from /drone/camera/depth/camera_info:
+#   fx=378.8534851074219, fy=378.8534851074219
+#   cx=318.66583251953125, cy=237.22059631347656
+#
+# depth_to_color from the RealSense Extrinsics message. Its rotation array is
+# configured as column-major in the ROS parameter files.
+# depth_to_color:
+#   R=[0.9999053478240967, -0.012793170288205147, -0.005052417982369661,
+#      0.01281267311424017, 0.9999105334281921, 0.0038465538527816534,
+#      0.005002756603062153, -0.00391092523932457, 0.9999798536300659]
+#   t=[0.0148990573361516, -0.00019538396736606956, 0.00014606618788093328]
+#
+# depth_to_gyro/depth_to_accel:
+#   R=identity
+#   t=[-0.005520000122487545, 0.005100000184029341, 0.011739999987185001]
+
+# Threshold for classifying close and far RGB-D points.
+Depth.ThDepth: 40.0
+Depth.Baseline: 0.05
+
+# Stereo baseline (meters) multiplied by fx. Used internally for RGB-D depth
+# to disparity conversion by the legacy settings path.
+Camera.bf: 30.25972900390625
+
+#--------------------------------------------------------------------------------------------
+# IMU Parameters: Intel RealSense D435i
+#--------------------------------------------------------------------------------------------
+IMU.NoiseGyro: 1.7e-4
+IMU.NoiseAcc: 2.0e-3
+IMU.GyroWalk: 1.9393e-5
+IMU.AccWalk: 3.0e-3
+IMU.Frequency: 200.0
+IMU.InsertKFsWhenLost: 1
+# The recorded segment can have low acceleration excitation; let ORB-SLAM3
+# initialize inertial RGB-D without rejecting it on the acceleration delta test.
+IMU.fastInit: 1
+
+#--------------------------------------------------------------------------------------------
+# IMU Extrinsics
+#--------------------------------------------------------------------------------------------
+# T_b_c from camera_color_optical_frame to camera_imu_optical_frame, derived
+# from recorded depth_to_gyro and depth_to_color stream extrinsics.
+IMU.T_b_c: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: f
+  data: [ 0.9999053478240967, 0.01281267311424017, 0.005002756603062153, -0.02041587457312365,
+          -0.012793170288205147, 0.9999105334281921, -0.00391092523932457, 0.00548654410263758,
+          -0.005052417982369661, 0.0038465538527816534, 0.9999798536300659, 0.0116699645621655,
+          0.0, 0.0, 0.0, 1.0 ]
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+ORBextractor.nFeatures: 1500
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+
+# Image is divided into a grid. At each cell FAST corners are extracted with a
+# minimum response threshold. If no corners are found with iniThFAST, the lower
+# minThFAST threshold is used.
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.02
+Viewer.KeyFrameLineWidth: 0.8
+Viewer.GraphLineWidth: 0.6
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.04
+Viewer.CameraLineWidth: 2.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500.0

@@ -4,11 +4,14 @@ oaslam_offline_vio_node:
     rgb_topic: "/upper/realsense_upper/color/image_raw"
     depth_topic: "/upper/realsense_upper/aligned_depth_to_color/image_raw"
     imu_topic: "/upper/realsense_upper/imu"
-    bag_path: "/opt/OA-SLAM/Data/realsense_recording/work_environment"
+    bag_path: "/opt/OA-SLAM/Data/realsense_recording/dynamic_robot_4"
 
     # Publishers
     pose_topic: "/oa_slam/camera_pose"
     world_frame_id: "map"
+    agent_id: "agent_1"
+    local_semantic_map_snapshot_topic: "/agent_1/semantic_map_snapshot"
+    local_semantic_map_delta_topic: "/agent_1/semantic_map_delta"
 
     # SLAM Backend
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
