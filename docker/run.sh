@@ -61,8 +61,19 @@ enter_shell() {
   docker exec -it "$SERVICE" bash
 }
 
+exec_container() {
+  local exec_args=()
+  if [[ -t 0 && -t 1 ]]; then
+    exec_args=(-it)
+  else
+    exec_args=(-i)
+  fi
+
+  docker exec "${exec_args[@]}" "$SERVICE" "$@"
+}
+
 build_cpp() {
-  docker exec -it "$SERVICE" bash -lc '
+  exec_container bash -lc '
     set -euo pipefail
     BUILD_DIR="${OASLAM_CPP_BUILD_DIR:-/opt/OA-SLAM/build}"
     INSTALL_PREFIX="${OASLAM_CPP_INSTALL_PREFIX:-/opt/oaslam_artifacts/cpp/install}"
@@ -84,7 +95,7 @@ build_cpp() {
 }
 
 build_ros2() {
-  docker exec -it "$SERVICE" bash -lc '
+  exec_container bash -lc '
     set -euo pipefail
     export ROS_DISTRO="${ROS_DISTRO:-humble}"
     export ROS_WS="${ROS_WS:-/opt/oaslam_ros2_ws}"
@@ -104,20 +115,25 @@ build_ros2() {
     cd "${ROS_WS}"
     colcon build \
       --merge-install \
-      --packages-select cv_bridge oaslam_ros2_wrapper \
+      --packages-select cv_bridge shared_semantic_map_interfaces oaslam_ros2_wrapper \
       --cmake-args -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=/usr/local/lib/cmake/opencv4
   '
 }
 
 run_ros2() {
-  local exec_args=(-it)
+  local exec_args=()
+  if [[ -t 0 && -t 1 ]]; then
+    exec_args=(-it)
+  else
+    exec_args=(-i)
+  fi
   if [[ -n "${1:-}" ]]; then
     exec_args+=(-e "OASLAM_ROS2_LAUNCH_FILE=$1")
   fi
   if [[ -n "${2:-}" ]]; then
     exec_args+=(-e "OASLAM_ROS2_PARAMS_FILE=$2")
   fi
-  docker exec "${exec_args[@]}" "$SERVICE" /bin/bash /opt/OA-SLAM/docker/ros2_entrypoint.sh
+  docker exec "${exec_args[@]}" "$SERVICE" /bin/bash /opt/OA-SLAM/docker/entrypoint_ros2.sh
 }
 
 run_ros2_online() {

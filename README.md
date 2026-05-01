@@ -49,7 +49,7 @@ xhost +local:root
 ## ROS 2 Online Run
 
 The online node subscribes to RGB, depth, and IMU topics and publishes pose,
-map point, semantic map, and marker outputs.
+map point, semantic map, local semantic map, and marker outputs.
 
 Default config:
 
@@ -97,7 +97,9 @@ The current checked-in data layout includes:
 Important parameters:
 
 - `rgb_topic`, `depth_topic`, `imu_topic` - input topics.
-- `pose_topic`, `map_points_topic`, `semantic_map_*` - output topics.
+- `pose_topic`, `map_points_topic`, `semantic_map_*` - legacy output topics.
+- `local_semantic_map_*` - SharedSemanticMap-compatible per-agent semantic
+  topics, for example `/agent_1/semantic_map_delta`.
 - `vocabulary_file` - usually `/opt/ScoutSLAM/Vocabulary/ORBvoc.txt`.
 - `camera_settings_file` - camera/ORB-SLAM settings YAML.
 - `observation_mode` - `onnx`, `file`, or `none`.

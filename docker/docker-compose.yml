@@ -44,6 +44,7 @@ services:
       - ../src:/opt/OA-SLAM/src:ro
       - ../ros2:/opt/OA-SLAM/ros2:ro
       - ../ros2/oaslam_ros2_wrapper:/opt/oaslam_ros2_ws/src/oaslam_ros2_wrapper:ro
+      - ../../SharedSemanticMap/ros2/shared_semantic_map_interfaces:/opt/oaslam_ros2_ws/src/shared_semantic_map_interfaces:ro
       - ../Data:/opt/OA-SLAM/Data
       - ../Cameras:/opt/OA-SLAM/Cameras:ro
       - ./:/opt/OA-SLAM/docker:ro

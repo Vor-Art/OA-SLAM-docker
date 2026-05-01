@@ -20,6 +20,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
 find_package(rosbag2_storage REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(shared_semantic_map_interfaces REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 
@@ -44,6 +45,7 @@ ament_target_dependencies(oaslam_ros2_wrapper_common
   geometry_msgs
   rclcpp
   sensor_msgs
+  shared_semantic_map_interfaces
   std_msgs
   visualization_msgs
 )
@@ -66,6 +68,7 @@ ament_target_dependencies(oaslam_vio_node
   message_filters
   rclcpp
   sensor_msgs
+  shared_semantic_map_interfaces
   std_msgs
   visualization_msgs
 )
@@ -89,6 +92,7 @@ ament_target_dependencies(oaslam_offline_vio_node
   rosbag2_cpp
   rosbag2_storage
   sensor_msgs
+  shared_semantic_map_interfaces
   std_msgs
   visualization_msgs
 )

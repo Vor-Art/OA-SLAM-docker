@@ -19,6 +19,7 @@
   <depend>rosbag2_cpp</depend>
   <depend>rosbag2_storage</depend>
   <depend>sensor_msgs</depend>
+  <depend>shared_semantic_map_interfaces</depend>
   <depend>std_msgs</depend>
   <depend>visualization_msgs</depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
