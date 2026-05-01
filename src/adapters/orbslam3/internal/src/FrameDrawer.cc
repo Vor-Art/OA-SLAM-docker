@@ -26,10 +26,24 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include <cmath>
 #include<mutex>
 
 namespace ORB_SLAM3
 {
+namespace {
+
+bool IsDrawableEllipse(const Ellipse& ell)
+{
+    const auto& c = ell.GetCenter();
+    const auto& axes = ell.GetAxes();
+    const double angle = ell.GetAngle();
+    return std::isfinite(c[0]) && std::isfinite(c[1]) &&
+           std::isfinite(axes[0]) && std::isfinite(axes[1]) &&
+           std::isfinite(angle) && axes[0] > 0.0 && axes[1] > 0.0;
+}
+
+} // namespace
 
 FrameDrawer::FrameDrawer(Atlas* pAtlas):both(false),mpAtlas(pAtlas)
 {
@@ -476,16 +490,20 @@ void FrameDrawer::Update(Tracking *pTracker)
         // Get calibration matrix from Eigen::Matrix3f, cast to double
         Eigen::Matrix3d K = pTracker->mCurrentFrame.mK_.cast<double>();
 
-        Eigen::Matrix<double, 3, 4> P = K * Rt;
+        if (Rt.allFinite() && K.allFinite()) {
+            Eigen::Matrix<double, 3, 4> P = K * Rt;
 
-        for (auto& tr : tracks) {
-            const auto* obj = tr->GetMapObject();
-            if (obj) {
-                auto proj = obj->GetEllipsoid().project(P);
-                object_projections_widgets_.push_back(ObjectProjectionWidget(proj, tr->GetId(),
-                                                                             tr->GetCategoryId(), tr->GetColor(),
-                                                                             tr->GetStatus() == ObjectTrackStatus::IN_MAP,
-                                                                             tr->unc_));
+            for (auto& tr : tracks) {
+                const auto* obj = tr->GetMapObject();
+                if (obj) {
+                    auto proj = obj->GetEllipsoid().project(P);
+                    if (IsDrawableEllipse(proj)) {
+                        object_projections_widgets_.push_back(ObjectProjectionWidget(proj, tr->GetId(),
+                                                                                     tr->GetCategoryId(), tr->GetColor(),
+                                                                                     tr->GetStatus() == ObjectTrackStatus::IN_MAP,
+                                                                                     tr->unc_));
+                    }
+                }
             }
         }
     }
@@ -498,6 +516,8 @@ void draw_ellipse_dashed(cv::Mat img, const Ellipse& ell, const cv::Scalar& colo
     const auto& c = ell.GetCenter();
     const auto& axes = ell.GetAxes();
     double angle = ell.GetAngle();
+    if (!IsDrawableEllipse(ell))
+        return;
     for (int i = 0; i < 360; i += space) {
         cv::ellipse(img, cv::Point2f(c[0], c[1]), cv::Size2f(axes[0], axes[1]),
                     TO_DEG(angle), i, i+size, color, thickness);
@@ -551,6 +571,8 @@ cv::Mat FrameDrawer::DrawProjections(cv::Mat img)
         const auto& c = ell.GetCenter();
         const auto& axes = ell.GetAxes();
         double angle = ell.GetAngle();
+        if (!IsDrawableEllipse(ell))
+            continue;
         if (use_category_cols_) {
             color = manager[w.category_id];
         } else {

@@ -45,6 +45,7 @@
 #include "ObjectTrack.h"
 #include "Converter.h"
 #include "ColorManager.h"
+#include <stdexcept>
 #include <thread>
 #include <pangolin/pangolin.h>
 #include <iomanip>
@@ -336,6 +337,9 @@ Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, 
 
 Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp, const std::vector<Detection::Ptr>& detections, const vector<IMU::Point>& vImuMeas, string filename)
 {
+    string stage = "start";
+    try
+    {
     if(mSensor!=RGBD  && mSensor!=IMU_RGBD)
     {
         cerr << "ERROR: you called TrackRGBD but input sensor was not set to RGBD." << endl;
@@ -354,6 +358,7 @@ Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const
 
     // Check reset
     {
+        stage = "check-reset";
         unique_lock<mutex> lock(mMutexReset);
         if(mbReset)
         {
@@ -369,16 +374,26 @@ Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const
     }
 
     if (mSensor == System::IMU_RGBD)
+    {
+        stage = "grab-imu";
         for(size_t i_imu = 0; i_imu < vImuMeas.size(); i_imu++)
             mpTracker->GrabImuData(vImuMeas[i_imu]);
+    }
 
+    stage = "grab-image-rgbd";
     Sophus::SE3f Tcw = mpTracker->GrabImageRGBD(imToFeed,imDepthToFeed,timestamp,filename,detections);
 
+    stage = "update-state";
     unique_lock<mutex> lock2(mMutexState);
     mTrackingState = mpTracker->mState;
     mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
     mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
     return Tcw;
+    }
+    catch(const std::exception& e)
+    {
+        throw std::runtime_error("System::TrackRGBD failed | stage=" + stage + " | err=" + e.what());
+    }
 }
 
 Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp,

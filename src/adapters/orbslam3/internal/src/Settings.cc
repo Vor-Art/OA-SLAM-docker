@@ -477,6 +477,22 @@ namespace ORB_SLAM3 {
         else{
             insertKFsWhenLost_ = true;
         }
+
+        fastImuInit_ = false;
+        cv::FileNode fastInitNode = fSettings["IMU.fastInit"];
+        if(!fastInitNode.empty()){
+            if(fastInitNode.isInt()){
+                fastImuInit_ = fastInitNode.operator int() != 0;
+            }
+            else if(fastInitNode.isString()){
+                const std::string value = fastInitNode.string();
+                fastImuInit_ = value == "1" || value == "true" ||
+                               value == "True" || value == "TRUE";
+            }
+            else{
+                cerr << "IMU.fastInit optional parameter must be an integer or boolean-like string; using false" << endl;
+            }
+        }
     }
 
     void Settings::readRGBD(cv::FileStorage& fSettings) {

@@ -42,6 +42,7 @@
 #include <mutex>
 #include <chrono>
 #include <numeric>
+#include <stdexcept>
 #include <unordered_set>
 #include <unordered_map>
 #include <Eigen/Dense>
@@ -648,6 +649,9 @@ void Tracking::newParameterLoader(Settings *settings) {
     float Na = settings->noiseAcc();
     float Ngw = settings->gyroWalk();
     float Naw = settings->accWalk();
+    mFastInit = settings->fastImuInit();
+    if(mFastInit)
+        cout << "Fast IMU initialization. Acceleration is not checked \n";
 
     const float sf = sqrt(mImuFreq);
     mpImuCalib = new IMU::Calib(Tbc,Ng*sf,Na*sf,Ngw/sf,Naw/sf);
@@ -1586,11 +1590,16 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
 Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp, string filename,
                                       const std::vector<Detection::Ptr>& detections, bool force_relocalize)
 {
+    string stage = "start";
+    try
+    {
+    stage = "frame-index";
     current_frame_idx_ = (current_frame_idx_ + 1) % (std::numeric_limits<size_t>::max()-1);
     mImGray = imRGB;
     imRGB.copyTo(im_rgb_);
     cv::Mat imDepth = imD;
 
+    stage = "convert-gray";
     if(mImGray.channels()==3)
     {
         if(mbRGB)
@@ -1606,15 +1615,18 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
             cvtColor(mImGray,mImGray,cv::COLOR_BGRA2GRAY);
     }
 
+    stage = "convert-depth-scale";
     if((fabs(mDepthMapFactor-1.0f)>1e-5) || imDepth.type()!=CV_32F)
         imDepth.convertTo(imDepth,CV_32F,mDepthMapFactor);
 
+    stage = "construct-frame";
     if (mSensor == System::RGBD)
         mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera);
     else if(mSensor == System::IMU_RGBD)
         mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,*mpImuCalib);
 
     // Store detections for object tracking
+    stage = "store-detections";
     current_frame_detections_ = detections;
     current_frame_good_detections_.clear();
     for (auto det : current_frame_detections_) {
@@ -1632,6 +1644,7 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
 
     if (force_relocalize)
     {
+        stage = "force-relocalize";
         auto t1 = std::chrono::high_resolution_clock::now();
 
         bool bOK = false;
@@ -1660,10 +1673,17 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
     }
     else
     {
+        stage = "track";
         Track();
     }
 
+    stage = "get-pose";
     return mCurrentFrame.GetPose();
+    }
+    catch(const std::exception& e)
+    {
+        throw std::runtime_error("Tracking::GrabImageRGBD failed | stage=" + stage + " | err=" + e.what());
+    }
 }
 
 
@@ -1772,7 +1792,11 @@ void Tracking::GrabImuData(const IMU::Point &imuMeasurement)
 
 void Tracking::PreintegrateIMU()
 {
+    string preint_stage = "start";
+    try
+    {
 
+    preint_stage = "check-prev-frame";
     if(!mCurrentFrame.mpPrevFrame)
     {
         Verbose::PrintMess("non prev frame ", Verbose::VERBOSITY_NORMAL);
@@ -1781,10 +1805,12 @@ void Tracking::PreintegrateIMU()
         mCurrentFrame.mpImuPreintegratedFrame = new IMU::Preintegrated(mLastFrame.mImuBias, mCurrentFrame.mImuCalib);
         mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
         mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
+        preint_stage = "set-integrated-no-prev-frame";
         mCurrentFrame.setIntegrated();
         return;
     }
 
+    preint_stage = "prepare-imu-vector";
     mvImuFromLastFrame.clear();
     mvImuFromLastFrame.reserve(mlQueueImuData.size());
     if(mlQueueImuData.size() == 0)
@@ -1795,10 +1821,12 @@ void Tracking::PreintegrateIMU()
         mCurrentFrame.mpImuPreintegratedFrame = new IMU::Preintegrated(mLastFrame.mImuBias, mCurrentFrame.mImuCalib);
         mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
         mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
+        preint_stage = "set-integrated-empty-queue";
         mCurrentFrame.setIntegrated();
         return;
     }
 
+    preint_stage = "drain-imu-queue";
     while(true)
     {
         {
@@ -1829,6 +1857,7 @@ void Tracking::PreintegrateIMU()
         }
     }
 
+    preint_stage = "check-imu-window";
     const int n = mvImuFromLastFrame.size()-1;
     if(n==0){
         cout << "Empty IMU measurements vector!!!\n";
@@ -1837,12 +1866,15 @@ void Tracking::PreintegrateIMU()
         mCurrentFrame.mpImuPreintegratedFrame = new IMU::Preintegrated(mLastFrame.mImuBias, mCurrentFrame.mImuCalib);
         mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
         mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
+        preint_stage = "set-integrated-empty-window";
         mCurrentFrame.setIntegrated();
         return;
     }
 
+    preint_stage = "create-preintegrator";
     IMU::Preintegrated* pImuPreintegratedFromLastFrame = new IMU::Preintegrated(mLastFrame.mImuBias,mCurrentFrame.mImuCalib);
 
+    preint_stage = "integrate-measurements";
     for(int i=0; i<n; i++)
     {
         float tstep;
@@ -1911,9 +1943,15 @@ void Tracking::PreintegrateIMU()
     mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
     mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
 
+    preint_stage = "set-integrated";
     mCurrentFrame.setIntegrated();
 
     //Verbose::PrintMess("Preintegration is finished!! ", Verbose::VERBOSITY_DEBUG);
+    }
+    catch(const std::exception& e)
+    {
+        throw std::runtime_error("Tracking::PreintegrateIMU failed | stage=" + preint_stage + " | err=" + e.what());
+    }
 }
 
 
@@ -2041,9 +2079,13 @@ void Tracking::Track()
 
         frame_report_period_total_ms_ = 0.0;
         frame_report_period_frame_count_ = 0;
-        frame_report_period_detected_objects_ = 0;
-    };
+	        frame_report_period_detected_objects_ = 0;
+	    };
 
+    string track_stage = "start";
+    try
+    {
+    track_stage = "step-by-step";
     if (bStepByStep)
     {
         std::cout << "Tracking: Waiting to the next step" << std::endl;
@@ -2052,6 +2094,7 @@ void Tracking::Track()
         mbStep = false;
     }
 
+    track_stage = "bad-imu-check";
     if(mpLocalMapper->mbBadImu)
     {
         cout << "TRACK: Reset map because local mapper set the bad imu flag " << endl;
@@ -2060,12 +2103,14 @@ void Tracking::Track()
         return;
     }
 
+    track_stage = "get-current-map";
     Map* pCurrentMap = mpAtlas->GetCurrentMap();
     if(!pCurrentMap)
     {
         cout << "ERROR: There is not an active map in the atlas" << endl;
     }
 
+    track_stage = "timestamp-check";
     if(mState!=NO_IMAGES_YET)
     {
         if(mLastFrame.mTimeStamp>mCurrentFrame.mTimeStamp)
@@ -2109,6 +2154,7 @@ void Tracking::Track()
     }
 
 
+    track_stage = "set-imu-bias";
     if ((mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD) && mpLastKeyFrame)
         mCurrentFrame.SetNewBias(mpLastKeyFrame->GetImuBias());
 
@@ -2124,6 +2170,7 @@ void Tracking::Track()
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_StartPreIMU = std::chrono::steady_clock::now();
 #endif
+        track_stage = "preintegrate-imu";
         PreintegrateIMU();
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndPreIMU = std::chrono::steady_clock::now();
@@ -2136,10 +2183,12 @@ void Tracking::Track()
     mbCreatedMap = false;
 
     // Get Map Mutex -> Map cannot be changed
+    track_stage = "lock-map-update";
     unique_lock<mutex> lock(pCurrentMap->mMutexMapUpdate);
 
     mbMapUpdated = false;
 
+    track_stage = "map-change-index";
     int nCurMapChangeIndex = pCurrentMap->GetMapChangeIndex();
     int nMapChangeIndex = pCurrentMap->GetLastMapChange();
     if(nCurMapChangeIndex>nMapChangeIndex)
@@ -2153,10 +2202,12 @@ void Tracking::Track()
     {
         if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD)
         {
+            track_stage = "stereo-initialization";
             StereoInitialization();
         }
         else
         {
+            track_stage = "monocular-initialization";
             MonocularInitialization();
         }
 
@@ -2164,7 +2215,9 @@ void Tracking::Track()
 
         if(mState!=OK) // If rightly initialized, mState=OK
         {
+            track_stage = "copy-last-frame-not-initialized";
             mLastFrame = Frame(mCurrentFrame);
+            track_stage = "finalize-not-initialized";
             finalize_frame_report();
             return;
         }
@@ -2176,6 +2229,7 @@ void Tracking::Track()
     }
     else
     {
+        track_stage = "track-initialized";
         // System is initialized. Track Frame.
         bool bOK;
 
@@ -2857,6 +2911,11 @@ void Tracking::Track()
         }
     }
 #endif
+    }
+    catch(const std::exception& e)
+    {
+        throw std::runtime_error("Tracking::Track failed | stage=" + track_stage + " | err=" + e.what());
+    }
 }
 
 
@@ -2866,9 +2925,9 @@ void Tracking::StereoInitialization()
     {
         if (mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
         {
-            if (!mCurrentFrame.mpImuPreintegrated || !mLastFrame.mpImuPreintegrated)
+            if (!mCurrentFrame.mpImuPreintegrated || (!mFastInit && !mLastFrame.mpImuPreintegrated))
             {
-                cout << "not IMU meas" << endl;
+                cout << "not enough IMU preintegration for initialization" << endl;
                 return;
             }
 

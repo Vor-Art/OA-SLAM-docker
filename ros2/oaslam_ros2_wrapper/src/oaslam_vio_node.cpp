@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "depth_alignment.h"
 #include "imu_buffer.h"
 #include "oaslam/core/frame_packet.h"
 #include "session_config_utils.h"
@@ -55,6 +56,13 @@ class OaSlamVioNode : public rclcpp::Node {
     semantic_map_delta_publisher_ =
         create_publisher<oaslam_ros2_wrapper::msg::SemanticMapDelta>(
             topics_.publisher.semantic_map_delta_topic, 10);
+    local_semantic_map_snapshot_publisher_ =
+        create_publisher<shared_semantic_map_interfaces::msg::LocalSemanticMapSnapshot>(
+            topics_.publisher.local_semantic_map_snapshot_topic,
+            rclcpp::QoS(1).reliable().transient_local());
+    local_semantic_map_delta_publisher_ =
+        create_publisher<shared_semantic_map_interfaces::msg::LocalSemanticMapDelta>(
+            topics_.publisher.local_semantic_map_delta_topic, 10);
     semantic_map_markers_publisher_ =
         create_publisher<visualization_msgs::msg::MarkerArray>(
             topics_.publisher.semantic_map_markers_topic,
@@ -98,11 +106,16 @@ class OaSlamVioNode : public rclcpp::Node {
          {"Visible map points topic", topics_.publisher.visible_map_points_topic},
          {"Semantic snapshot topic", topics_.publisher.semantic_map_snapshot_topic},
          {"Semantic delta topic", topics_.publisher.semantic_map_delta_topic},
+         {"Local semantic snapshot topic",
+          topics_.publisher.local_semantic_map_snapshot_topic},
+         {"Local semantic delta topic",
+          topics_.publisher.local_semantic_map_delta_topic},
          {"Semantic markers topic", topics_.publisher.semantic_map_markers_topic},
          {"World frame", topics_.publisher.world_frame_id},
          {"Agent ID", topics_.publisher.agent_id},
          {"Session ID", topics_.publisher.session_id},
          {"Camera ID", topics_.shared.camera_id},
+         {"Depth alignment", topics_.shared.depth_alignment.enabled ? "on" : "off"},
          {"Output folder", runtime_.session_params.output_folder}});
   }
 
@@ -160,6 +173,21 @@ class OaSlamVioNode : public rclcpp::Node {
       return;
     }
 
+    cv::Mat depth_for_rgb;
+    std::string depth_error;
+    if (!oaslam_ros2_wrapper::PrepareDepthForRgb(
+            cv_depth->image, cv_rgb->image.size(),
+            topics_.shared.depth_alignment, &depth_for_rgb, &depth_error)) {
+      RCLCPP_ERROR_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "Depth preparation failed | reason=%s | depth=%dx%d rgb=%dx%d alignment=%s",
+          depth_error.c_str(),
+          cv_depth->image.cols, cv_depth->image.rows,
+          cv_rgb->image.cols, cv_rgb->image.rows,
+          topics_.shared.depth_alignment.enabled ? "on" : "off");
+      return;
+    }
+
     const double image_timestamp = rclcpp::Time(rgb_msg->header.stamp).seconds();
 
     // Drain IMU measurements up to the image timestamp
@@ -171,7 +199,7 @@ class OaSlamVioNode : public rclcpp::Node {
     frame.timestamp = image_timestamp;
     frame.camera_id = topics_.shared.camera_id;
     frame.image = cv_rgb->image.clone();
-    frame.depth_image = cv_depth->image.clone();
+    frame.depth_image = std::move(depth_for_rgb);
     frame.has_depth = true;
     frame.imu_measurements = std::move(imu_measurements);
     frame.has_imu = !frame.imu_measurements.empty();
@@ -231,6 +259,12 @@ class OaSlamVioNode : public rclcpp::Node {
     semantic_map_delta_publisher_->publish(
         oaslam_ros2_wrapper::ToSemanticMapDeltaMsg(
             header, topics_.publisher, tracking.semantic_map_delta));
+    local_semantic_map_snapshot_publisher_->publish(
+        oaslam_ros2_wrapper::ToLocalSemanticMapSnapshotMsg(
+            header, topics_.publisher, tracking.semantic_map));
+    local_semantic_map_delta_publisher_->publish(
+        oaslam_ros2_wrapper::ToLocalSemanticMapDeltaMsg(
+            header, topics_.publisher, tracking.semantic_map_delta));
     semantic_map_markers_publisher_->publish(
         oaslam_ros2_wrapper::ToSemanticMapMarkers(
             header, topics_.publisher, tracking.semantic_map));
@@ -275,6 +309,10 @@ class OaSlamVioNode : public rclcpp::Node {
       semantic_map_snapshot_publisher_;
   rclcpp::Publisher<oaslam_ros2_wrapper::msg::SemanticMapDelta>::SharedPtr
       semantic_map_delta_publisher_;
+  rclcpp::Publisher<shared_semantic_map_interfaces::msg::LocalSemanticMapSnapshot>::SharedPtr
+      local_semantic_map_snapshot_publisher_;
+  rclcpp::Publisher<shared_semantic_map_interfaces::msg::LocalSemanticMapDelta>::SharedPtr
+      local_semantic_map_delta_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
       semantic_map_markers_publisher_;
 

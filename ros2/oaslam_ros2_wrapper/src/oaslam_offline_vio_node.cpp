@@ -17,11 +17,15 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <limits>
 #include <map>
 #include <memory>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "depth_alignment.h"
 #include "oaslam/core/frame_packet.h"
 #include "session_config_utils.h"
 
@@ -35,6 +39,10 @@ constexpr size_t kMaxDepthWindowSize = 10;
 
 /// Maximum number of IMU samples to buffer.
 constexpr size_t kMaxImuBufferSize = 20000;
+
+/// Preserve recent IMU samples before the requested start offset so the first
+/// processed image can still be preintegrated against its previous samples.
+constexpr int64_t kImuStartPrerollNanos = 1000000000LL;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Deserialization helpers
@@ -57,9 +65,33 @@ double StampToSeconds(const builtin_interfaces::msg::Time& stamp) {
          static_cast<double>(stamp.nanosec) * 1e-9;
 }
 
-/// Convert nanosecond bag timestamp to seconds.
-double NanosToSeconds(int64_t nanos) {
-  return static_cast<double>(nanos) * 1e-9;
+bool TryDeserializeImuMeasurement(
+    const std::shared_ptr<rosbag2_storage::SerializedBagMessage>& bag_msg,
+    oaslam::ImuMeasurement* measurement) {
+  auto imu_msg = DeserializeMessage<sensor_msgs::msg::Imu>(bag_msg);
+  measurement->timestamp = StampToSeconds(imu_msg->header.stamp);
+  measurement->acc_x = imu_msg->linear_acceleration.x;
+  measurement->acc_y = imu_msg->linear_acceleration.y;
+  measurement->acc_z = imu_msg->linear_acceleration.z;
+  measurement->gyro_x = imu_msg->angular_velocity.x;
+  measurement->gyro_y = imu_msg->angular_velocity.y;
+  measurement->gyro_z = imu_msg->angular_velocity.z;
+
+  return std::isfinite(measurement->acc_x) &&
+         std::isfinite(measurement->acc_y) &&
+         std::isfinite(measurement->acc_z) &&
+         std::isfinite(measurement->gyro_x) &&
+         std::isfinite(measurement->gyro_y) &&
+         std::isfinite(measurement->gyro_z) &&
+         std::isfinite(measurement->timestamp);
+}
+
+void PushImuMeasurement(std::deque<oaslam::ImuMeasurement>* imu_buffer,
+                        const oaslam::ImuMeasurement& measurement) {
+  imu_buffer->push_back(measurement);
+  while (imu_buffer->size() > kMaxImuBufferSize) {
+    imu_buffer->pop_front();
+  }
 }
 
 /// A timestamped serialized depth message kept in the sliding window.
@@ -110,6 +142,13 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     semantic_map_delta_publisher_ =
         create_publisher<oaslam_ros2_wrapper::msg::SemanticMapDelta>(
             topics_.publisher.semantic_map_delta_topic, 10);
+    local_semantic_map_snapshot_publisher_ =
+        create_publisher<shared_semantic_map_interfaces::msg::LocalSemanticMapSnapshot>(
+            topics_.publisher.local_semantic_map_snapshot_topic,
+            rclcpp::QoS(1).reliable().transient_local());
+    local_semantic_map_delta_publisher_ =
+        create_publisher<shared_semantic_map_interfaces::msg::LocalSemanticMapDelta>(
+            topics_.publisher.local_semantic_map_delta_topic, 10);
     semantic_map_markers_publisher_ =
         create_publisher<visualization_msgs::msg::MarkerArray>(
             topics_.publisher.semantic_map_markers_topic,
@@ -118,6 +157,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     oaslam_ros2_wrapper::LogNodeStartup(
         get_logger(), "offline VIO", runtime_.session_params,
         {{"Bag path", topics_.bag_path},
+         {"Start offset sec", std::to_string(topics_.start_offset_sec)},
          {"RGB topic", topics_.shared.rgb_topic},
          {"Depth topic", topics_.shared.depth_topic},
          {"IMU topic", topics_.shared.imu_topic},
@@ -127,11 +167,16 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
          {"Visible map points topic", topics_.publisher.visible_map_points_topic},
          {"Semantic snapshot topic", topics_.publisher.semantic_map_snapshot_topic},
          {"Semantic delta topic", topics_.publisher.semantic_map_delta_topic},
+         {"Local semantic snapshot topic",
+          topics_.publisher.local_semantic_map_snapshot_topic},
+         {"Local semantic delta topic",
+          topics_.publisher.local_semantic_map_delta_topic},
          {"Semantic markers topic", topics_.publisher.semantic_map_markers_topic},
          {"World frame", topics_.publisher.world_frame_id},
          {"Agent ID", topics_.publisher.agent_id},
          {"Session ID", topics_.publisher.session_id},
          {"Camera ID", topics_.shared.camera_id},
+         {"Depth alignment", topics_.shared.depth_alignment.enabled ? "on" : "off"},
          {"Output folder", runtime_.session_params.output_folder}});
   }
 
@@ -206,9 +251,14 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     oaslam::Transform4d last_known_pose = oaslam::Transform4d::eye();
 
     bool quit_requested = false;
+    int64_t bag_start_nanos = -1;
+    int64_t start_time_nanos = std::numeric_limits<int64_t>::min();
+    uint64_t total_messages_skipped_start_offset = 0;
+    uint64_t total_imu_preroll = 0;
     auto wall_start = std::chrono::steady_clock::now();
 
-    RCLCPP_INFO(get_logger(), "Bag playback started");
+    RCLCPP_INFO(get_logger(), "Bag playback started | start_offset_sec=%.3f",
+                topics_.start_offset_sec);
 
     // ── Single-pass streaming loop ──
     // The rosbag2 sequential reader delivers messages in storage order
@@ -221,9 +271,46 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     //   - RGB:   TRIGGER PROCESSING — find closest depth, drain IMU,
     //            build FramePacket, process, write trajectory line
 
-    while (rclcpp::ok() && reader.has_next() && !quit_requested) {
+    std::string last_stage = "start";
+    std::string last_topic;
+    int64_t last_bag_timestamp = -1;
+    uint64_t last_frame_id = 0;
+    double last_image_timestamp = 0.0;
+
+    try {
+    while (rclcpp::ok() && !quit_requested) {
+      last_stage = "reader.has_next";
+      if (!reader.has_next()) {
+        break;
+      }
+
+      last_stage = "reader.read_next";
       auto bag_msg = reader.read_next();
+      last_bag_timestamp = bag_msg->time_stamp;
+      if (bag_start_nanos == -1) {
+        bag_start_nanos = bag_msg->time_stamp;
+        start_time_nanos =
+            bag_start_nanos +
+            static_cast<int64_t>(topics_.start_offset_sec * 1e9);
+      }
       const std::string& topic = bag_msg->topic_name;
+      last_topic = topic;
+      if (bag_msg->time_stamp < start_time_nanos) {
+        total_messages_skipped_start_offset++;
+        if (runtime_.session_params.use_imu &&
+            topic == topics_.shared.imu_topic &&
+            bag_msg->time_stamp >= start_time_nanos - kImuStartPrerollNanos) {
+          last_stage = "deserialize-imu-preroll";
+          oaslam::ImuMeasurement measurement;
+          if (TryDeserializeImuMeasurement(bag_msg, &measurement)) {
+            PushImuMeasurement(&imu_buffer, measurement);
+            total_imu_preroll++;
+          } else {
+            imu_nan_filtered++;
+          }
+        }
+        continue;
+      }
 
       // ────────────────────────────────────────────────────────────────
       // IMU message
@@ -231,30 +318,14 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       if (topic == topics_.shared.imu_topic) {
         total_imu_in_bag++;
 
-        auto imu_msg = DeserializeMessage<sensor_msgs::msg::Imu>(bag_msg);
+        last_stage = "deserialize-imu";
         oaslam::ImuMeasurement m;
-        m.timestamp = StampToSeconds(imu_msg->header.stamp);
-        m.acc_x = imu_msg->linear_acceleration.x;
-        m.acc_y = imu_msg->linear_acceleration.y;
-        m.acc_z = imu_msg->linear_acceleration.z;
-        m.gyro_x = imu_msg->angular_velocity.x;
-        m.gyro_y = imu_msg->angular_velocity.y;
-        m.gyro_z = imu_msg->angular_velocity.z;
-
-        // Filter NaN/Inf
-        if (!std::isfinite(m.acc_x) || !std::isfinite(m.acc_y) ||
-            !std::isfinite(m.acc_z) || !std::isfinite(m.gyro_x) ||
-            !std::isfinite(m.gyro_y) || !std::isfinite(m.gyro_z) ||
-            !std::isfinite(m.timestamp)) {
+        if (!TryDeserializeImuMeasurement(bag_msg, &m)) {
           imu_nan_filtered++;
           continue;
         }
 
-        imu_buffer.push_back(m);
-
-        while (imu_buffer.size() > kMaxImuBufferSize) {
-          imu_buffer.pop_front();
-        }
+        PushImuMeasurement(&imu_buffer, m);
 
         continue;
       }
@@ -265,7 +336,9 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       if (topic == topics_.shared.depth_topic) {
         total_depth_in_bag++;
 
-        const double ts = NanosToSeconds(bag_msg->time_stamp);
+        last_stage = "deserialize-depth-header";
+        auto depth_msg = DeserializeMessage<sensor_msgs::msg::Image>(bag_msg);
+        const double ts = StampToSeconds(depth_msg->header.stamp);
         depth_window.push_back({ts, bag_msg});
 
         while (depth_window.size() > kMaxDepthWindowSize) {
@@ -280,10 +353,32 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       // ────────────────────────────────────────────────────────────────
       if (topic == topics_.shared.rgb_topic) {
         total_rgb_in_bag++;
+        last_frame_id = frame_counter;
 
-        const double image_timestamp = NanosToSeconds(bag_msg->time_stamp);
+        // ── 1. Deserialize RGB and use its header timestamp as the SLAM
+        // clock. IMU samples use header timestamps too, so mixing bag receive
+        // time here would break ORB-SLAM3 preintegration.
+        last_stage = "deserialize-rgb";
+        auto rgb_msg = DeserializeMessage<sensor_msgs::msg::Image>(bag_msg);
+        const double image_timestamp = StampToSeconds(rgb_msg->header.stamp);
+        last_image_timestamp = image_timestamp;
+        cv_bridge::CvImageConstPtr cv_rgb;
+        try {
+          last_stage = "convert-rgb";
+          cv_rgb = cv_bridge::toCvCopy(rgb_msg, "bgr8");
+        } catch (const cv_bridge::Exception& exc) {
+          RCLCPP_WARN(get_logger(), "Frame skipped | id=%lu | rgb-convert err=%s",
+                      static_cast<unsigned long>(frame_counter), exc.what());
+          total_poses_interpolated++;
+          if (runtime_.tum_trajectory_file.is_open()) {
+            oaslam_ros2_wrapper::WriteTumPoseLine(
+                runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
+          }
+          frame_counter++;
+          continue;
+        }
 
-        // ── 1. Find closest depth image in the sliding window ──
+        // ── 2. Find closest depth image in the sliding window ──
         size_t best_depth_idx = 0;
         bool found_depth = false;
 
@@ -296,7 +391,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           }
         }
 
-        // ── 2. Null depth guard: skip frame if no depth is buffered ──
+        // ── 3. Null depth guard: skip frame if no depth is buffered ──
         if (!found_depth) {
           total_frames_skipped_no_depth++;
           if (total_frames_skipped_no_depth <= 10) {
@@ -320,30 +415,15 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           continue;  // SKIP — do NOT pass null depth to SLAM
         }
 
-        // ── 3. Deserialize RGB ──
-        auto rgb_msg = DeserializeMessage<sensor_msgs::msg::Image>(bag_msg);
-        cv_bridge::CvImageConstPtr cv_rgb;
-        try {
-          cv_rgb = cv_bridge::toCvCopy(rgb_msg, "bgr8");
-        } catch (const cv_bridge::Exception& exc) {
-          RCLCPP_WARN(get_logger(), "Frame skipped | id=%lu | rgb-convert err=%s",
-                      static_cast<unsigned long>(frame_counter), exc.what());
-          total_poses_interpolated++;
-          if (runtime_.tum_trajectory_file.is_open()) {
-            oaslam_ros2_wrapper::WriteTumPoseLine(
-                runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
-          }
-          frame_counter++;
-          continue;
-        }
-
         // ── 4. Deserialize depth ──
         cv::Mat depth_mat;
         bool has_depth = false;
         {
+          last_stage = "deserialize-depth-image";
           auto depth_msg = DeserializeMessage<sensor_msgs::msg::Image>(
               depth_window[best_depth_idx].msg);
           try {
+            last_stage = "convert-depth";
             auto cv_depth = cv_bridge::toCvCopy(depth_msg);
             depth_mat = cv_depth->image;
             has_depth = true;
@@ -353,20 +433,22 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           }
         }
 
-        // ── 5. Validate depth dimensions match RGB ──
+        // ── 5. Validate or register depth to RGB ──
+        cv::Mat depth_for_rgb;
         if (has_depth) {
-          if (depth_mat.empty()) {
+          std::string depth_error;
+          last_stage = "prepare-depth";
+          if (!oaslam_ros2_wrapper::PrepareDepthForRgb(
+                  depth_mat, cv_rgb->image.size(),
+                  topics_.shared.depth_alignment, &depth_for_rgb,
+                  &depth_error)) {
             RCLCPP_WARN(get_logger(),
-                        "Frame skipped | id=%lu | reason=empty-depth",
-                        static_cast<unsigned long>(frame_counter));
-            has_depth = false;
-          } else if (depth_mat.rows != cv_rgb->image.rows ||
-                     depth_mat.cols != cv_rgb->image.cols) {
-            RCLCPP_WARN(get_logger(),
-                        "Frame skipped | id=%lu | reason=depth-size-mismatch | depth=%dx%d rgb=%dx%d",
+                        "Frame skipped | id=%lu | reason=%s | depth=%dx%d rgb=%dx%d alignment=%s",
                         static_cast<unsigned long>(frame_counter),
+                        depth_error.c_str(),
                         depth_mat.cols, depth_mat.rows,
-                        cv_rgb->image.cols, cv_rgb->image.rows);
+                        cv_rgb->image.cols, cv_rgb->image.rows,
+                        topics_.shared.depth_alignment.enabled ? "on" : "off");
             has_depth = false;
           }
         }
@@ -427,12 +509,13 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         frame.timestamp = image_timestamp;
         frame.camera_id = topics_.shared.camera_id;
         frame.image = cv_rgb->image.clone();
-        frame.depth_image = depth_mat.clone();
+        frame.depth_image = std::move(depth_for_rgb);
         frame.has_depth = true;
         frame.imu_measurements = std::move(imu_for_frame);
         frame.has_imu = !frame.imu_measurements.empty();
 
         // ── 10. Backpressure ──
+        last_stage = "mapping-backpressure";
         if (!oaslam_ros2_wrapper::WaitForMappingBackpressure(*runtime_.session)) {
           RCLCPP_INFO(get_logger(), "Bag playback interrupted | reason=shutdown");
           quit_requested = true;
@@ -440,10 +523,12 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         }
 
         // ── 11. Process frame ──
+        last_stage = "process-frame";
         const auto result = runtime_.session->processFrame(frame);
         total_frames_processed++;
 
         if (!shutdown_requested_->load() && rclcpp::ok()) {
+          last_stage = "publish-semantic-map";
           PublishSemanticMap(rgb_msg->header, result.tracking);
         }
 
@@ -452,6 +537,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           total_poses_obtained++;
           last_known_pose = result.tracking.T_world_camera;
           if (!shutdown_requested_->load() && rclcpp::ok()) {
+            last_stage = "publish-tracking-output";
             pose_publisher_->publish(oaslam_ros2_wrapper::ToPoseStamped(
                 rgb_msg->header,
                 topics_.publisher.world_frame_id,
@@ -473,6 +559,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         }
 
         if (runtime_.tum_trajectory_file.is_open()) {
+          last_stage = "write-trajectory";
           oaslam_ros2_wrapper::WriteTumPoseLine(
               runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
         }
@@ -480,14 +567,32 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         // ── 13. Progress logging ──
         if (total_frames_processed % 100 == 0) {
           auto now = std::chrono::steady_clock::now();
-          double elapsed_sec = std::chrono::duration<double>(now - wall_start).count();
-          double fps = total_frames_processed / elapsed_sec;
+          double total_sec = std::chrono::duration<double>(now - wall_start).count();
+          double fps = total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0;
           std::printf("Progress | frames=%lu tracked=%lu fallback=%lu skip_no_depth=%lu fps=%.1f\n",
                       static_cast<unsigned long>(total_frames_processed),
                       static_cast<unsigned long>(total_poses_obtained),
                       static_cast<unsigned long>(total_poses_interpolated),
                       static_cast<unsigned long>(total_frames_skipped_no_depth),
                       fps);
+          std::printf(
+            "Offline VIO TMP PROGRESS | rgb=%lu depth=%lu imu=%lu imu_nan=%lu "
+            "processed=%lu tracked=%lu fallback=%lu skip_no_depth=%lu "
+            "skip_start_offset=%lu imu_preroll=%lu traj=%lu "
+            "total_time=%.1fs fps=%.1f\n",
+            static_cast<unsigned long>(total_rgb_in_bag),
+            static_cast<unsigned long>(total_depth_in_bag),
+            static_cast<unsigned long>(total_imu_in_bag),
+            static_cast<unsigned long>(imu_nan_filtered),
+            static_cast<unsigned long>(total_frames_processed),
+            static_cast<unsigned long>(total_poses_obtained),
+            static_cast<unsigned long>(total_poses_interpolated),
+            static_cast<unsigned long>(total_frames_skipped_no_depth),
+            static_cast<unsigned long>(total_messages_skipped_start_offset),
+            static_cast<unsigned long>(total_imu_preroll),
+            static_cast<unsigned long>(total_rgb_in_bag),
+            total_sec, fps
+        );
         }
 
         // Check if SLAM requested quit
@@ -502,6 +607,17 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       // Other topics — count but don't process
       total_ignored_messages++;
     }
+    } catch (const std::exception& exc) {
+      std::ostringstream context;
+      context << "offline playback failed"
+              << " | stage=" << last_stage
+              << " | topic=" << (last_topic.empty() ? "<none>" : last_topic)
+              << " | bag_time_ns=" << last_bag_timestamp
+              << " | frame=" << last_frame_id
+              << " | image_time=" << last_image_timestamp
+              << " | err=" << exc.what();
+      throw std::runtime_error(context.str());
+    }
 
     // ── Done ──
     auto wall_end = std::chrono::steady_clock::now();
@@ -513,7 +629,8 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
 
     std::printf(
         "Offline VIO done | rgb=%lu depth=%lu imu=%lu imu_nan=%lu "
-        "processed=%lu tracked=%lu fallback=%lu skip_no_depth=%lu traj=%lu "
+        "processed=%lu tracked=%lu fallback=%lu skip_no_depth=%lu "
+        "skip_start_offset=%lu imu_preroll=%lu traj=%lu "
         "total_time=%.1fs fps=%.1f\n",
         static_cast<unsigned long>(total_rgb_in_bag),
         static_cast<unsigned long>(total_depth_in_bag),
@@ -523,6 +640,8 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         static_cast<unsigned long>(total_poses_obtained),
         static_cast<unsigned long>(total_poses_interpolated),
         static_cast<unsigned long>(total_frames_skipped_no_depth),
+        static_cast<unsigned long>(total_messages_skipped_start_offset),
+        static_cast<unsigned long>(total_imu_preroll),
         static_cast<unsigned long>(total_rgb_in_bag),
         total_sec,
         total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0
@@ -543,6 +662,12 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     semantic_map_delta_publisher_->publish(
         oaslam_ros2_wrapper::ToSemanticMapDeltaMsg(
             header, topics_.publisher, tracking.semantic_map_delta));
+    local_semantic_map_snapshot_publisher_->publish(
+        oaslam_ros2_wrapper::ToLocalSemanticMapSnapshotMsg(
+            header, topics_.publisher, tracking.semantic_map));
+    local_semantic_map_delta_publisher_->publish(
+        oaslam_ros2_wrapper::ToLocalSemanticMapDeltaMsg(
+            header, topics_.publisher, tracking.semantic_map_delta));
     semantic_map_markers_publisher_->publish(
         oaslam_ros2_wrapper::ToSemanticMapMarkers(
             header, topics_.publisher, tracking.semantic_map));
@@ -560,6 +685,10 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       semantic_map_snapshot_publisher_;
   rclcpp::Publisher<oaslam_ros2_wrapper::msg::SemanticMapDelta>::SharedPtr
       semantic_map_delta_publisher_;
+  rclcpp::Publisher<shared_semantic_map_interfaces::msg::LocalSemanticMapSnapshot>::SharedPtr
+      local_semantic_map_snapshot_publisher_;
+  rclcpp::Publisher<shared_semantic_map_interfaces::msg::LocalSemanticMapDelta>::SharedPtr
+      local_semantic_map_delta_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
       semantic_map_markers_publisher_;
   std::shared_ptr<std::atomic<bool>> shutdown_requested_ =
@@ -581,7 +710,7 @@ int main(int argc, char** argv) {
 
   } catch (const std::exception& exc) {
     RCLCPP_FATAL(rclcpp::get_logger("oaslam_offline_vio_node"),
-                 "Startup failed | err=%s", exc.what());
+                 "Offline VIO failed | err=%s", exc.what());
     rclcpp::shutdown();
     return 1;
   }

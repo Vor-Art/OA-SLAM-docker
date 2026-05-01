@@ -91,6 +91,7 @@ namespace ORB_SLAM3 {
         float imuFrequency() {return imuFrequency_;}
         Sophus::SE3f Tbc() {return Tbc_;}
         bool insertKFsWhenLost() {return insertKFsWhenLost_;}
+        bool fastImuInit() {return fastImuInit_;}
 
         float depthMapFactor() {return depthMapFactor_;}
         float centerReprojectionThresholdPx() {return centerReprojectionThresholdPx_;}
@@ -211,6 +212,7 @@ namespace ORB_SLAM3 {
         float imuFrequency_;
         Sophus::SE3f Tbc_;
         bool insertKFsWhenLost_;
+        bool fastImuInit_ = false;
 
         /*
          * RGBD stuff

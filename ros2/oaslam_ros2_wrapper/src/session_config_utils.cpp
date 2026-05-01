@@ -23,8 +23,7 @@ namespace oaslam_ros2_wrapper {
 namespace {
 
 constexpr char kDefaultVocabularyFile[] = "/opt/OA-SLAM/Vocabulary/ORBvoc.txt";
-constexpr char kDefaultCameraSettingsFile[] =
-    "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/d435i_imu_rgbd.yaml";
+constexpr char kDefaultCameraSettingsFile[] = "";
 constexpr int kMaxKeyframeQueueDepth = 2;
 constexpr auto kBackpressureSleep = std::chrono::microseconds(50);
 constexpr double kMinSemanticAxis = 1e-3;
@@ -228,6 +227,72 @@ std::vector<int> LoadIgnoredCategoriesFile(const std::string& path) {
   return categories;
 }
 
+template <size_t N>
+std::array<double, N> ReadDoubleArrayParameter(
+    rclcpp::Node& node,
+    const std::string& name,
+    const std::array<double, N>& default_value,
+    bool required) {
+  const std::vector<double> values =
+      node.declare_parameter<std::vector<double>>(
+          name, std::vector<double>(default_value.begin(), default_value.end()));
+
+  if (values.size() != N) {
+    if (required) {
+      std::ostringstream stream;
+      stream << name << " must contain exactly " << N << " numbers";
+      throw std::runtime_error(stream.str());
+    }
+    return default_value;
+  }
+
+  std::array<double, N> result{};
+  std::copy(values.begin(), values.end(), result.begin());
+  return result;
+}
+
+void ValidateIntrinsics(const std::array<double, 4>& intrinsics,
+                        const std::string& name) {
+  if (intrinsics[0] <= 0.0 || intrinsics[1] <= 0.0) {
+    throw std::runtime_error(name + " must use positive fx and fy");
+  }
+}
+
+DepthAlignmentParams DeclareDepthAlignmentParameters(rclcpp::Node& node) {
+  DepthAlignmentParams params;
+  params.enabled =
+      node.declare_parameter<bool>("depth_alignment_enabled", false);
+  params.rotation_is_column_major = node.declare_parameter<bool>(
+      "depth_alignment_rotation_is_column_major", false);
+  params.depth_unit_scale =
+      node.declare_parameter<double>("depth_alignment_depth_unit_scale", 0.001);
+  params.rgb_intrinsics = ReadDoubleArrayParameter<4>(
+      node, "depth_alignment_rgb_intrinsics", params.rgb_intrinsics,
+      params.enabled);
+  params.depth_intrinsics = ReadDoubleArrayParameter<4>(
+      node, "depth_alignment_depth_intrinsics", params.depth_intrinsics,
+      params.enabled);
+  params.depth_to_rgb_rotation = ReadDoubleArrayParameter<9>(
+      node, "depth_alignment_depth_to_rgb_rotation",
+      params.depth_to_rgb_rotation, params.enabled);
+  params.depth_to_rgb_translation = ReadDoubleArrayParameter<3>(
+      node, "depth_alignment_depth_to_rgb_translation",
+      params.depth_to_rgb_translation, params.enabled);
+
+  if (params.enabled) {
+    if (params.depth_unit_scale <= 0.0) {
+      throw std::runtime_error(
+          "depth_alignment_depth_unit_scale must be positive");
+    }
+    ValidateIntrinsics(params.rgb_intrinsics,
+                       "depth_alignment_rgb_intrinsics");
+    ValidateIntrinsics(params.depth_intrinsics,
+                       "depth_alignment_depth_intrinsics");
+  }
+
+  return params;
+}
+
 oaslam::ObservationSourceKind ParseObservationMode(const std::string& value) {
   if (value == "none") {
     return oaslam::ObservationSourceKind::None;
@@ -271,6 +336,7 @@ SharedTopicParams DeclareSharedTopicParameters(rclcpp::Node& node) {
       node.declare_parameter<std::string>("imu_topic", "/camera/imu");
   params.camera_id =
       node.declare_parameter<std::string>("camera_id", "rgbd0");
+  params.depth_alignment = DeclareDepthAlignmentParameters(node);
   return params;
 }
 
@@ -301,6 +367,14 @@ OnlineTopicParams DeclareOnlineTopicParameters(rclcpp::Node& node) {
                                       : params.shared.camera_id);
   params.publisher.session_id = node.declare_parameter<std::string>(
       "session_id", DefaultSessionId(node));
+  params.publisher.local_semantic_map_snapshot_topic =
+      node.declare_parameter<std::string>(
+          "local_semantic_map_snapshot_topic",
+          "/" + params.publisher.agent_id + "/semantic_map_snapshot");
+  params.publisher.local_semantic_map_delta_topic =
+      node.declare_parameter<std::string>(
+          "local_semantic_map_delta_topic",
+          "/" + params.publisher.agent_id + "/semantic_map_delta");
   return params;
 }
 
@@ -331,6 +405,14 @@ OfflineTopicParams DeclareOfflineTopicParameters(rclcpp::Node& node) {
                                       : params.shared.camera_id);
   params.publisher.session_id = node.declare_parameter<std::string>(
       "session_id", DefaultSessionId(node));
+  params.publisher.local_semantic_map_snapshot_topic =
+      node.declare_parameter<std::string>(
+          "local_semantic_map_snapshot_topic",
+          "/" + params.publisher.agent_id + "/semantic_map_snapshot");
+  params.publisher.local_semantic_map_delta_topic =
+      node.declare_parameter<std::string>(
+          "local_semantic_map_delta_topic",
+          "/" + params.publisher.agent_id + "/semantic_map_delta");
   params.bag_path = node.declare_parameter<std::string>("bag_path", "");
   if (params.bag_path.empty()) {
     throw std::runtime_error(
@@ -338,6 +420,11 @@ OfflineTopicParams DeclareOfflineTopicParameters(rclcpp::Node& node) {
   }
   if (!std::filesystem::exists(params.bag_path)) {
     throw std::runtime_error("Bag path does not exist: " + params.bag_path);
+  }
+  params.start_offset_sec =
+      node.declare_parameter<double>("start_offset_sec", 0.0);
+  if (params.start_offset_sec < 0.0) {
+    throw std::runtime_error("start_offset_sec must be non-negative");
   }
   return params;
 }
@@ -454,7 +541,13 @@ void ShutdownNodeRuntime(NodeRuntime& runtime, const rclcpp::Logger& logger) {
   }
 
   if (runtime.session) {
-    runtime.session->shutdown();
+    try {
+      runtime.session->shutdown();
+    } catch (const std::exception& exc) {
+      RCLCPP_WARN(logger, "SLAM session shutdown raised | err=%s", exc.what());
+    } catch (...) {
+      RCLCPP_WARN(logger, "SLAM session shutdown raised | err=unknown");
+    }
     runtime.session.reset();
     RCLCPP_INFO(logger, "SLAM session shut down");
   }
@@ -619,6 +712,65 @@ msg::SemanticMapDelta ToSemanticMapDeltaMsg(
   message.updated.reserve(delta.updated.size());
   for (const auto& object : delta.updated) {
     message.updated.push_back(ToSemanticObjectMsg(object));
+  }
+  message.removed_object_ids = delta.removed_object_ids;
+  return message;
+}
+
+shared_semantic_map_interfaces::msg::LocalSemanticObject
+ToLocalSemanticObjectMsg(const oaslam::SemanticObject& object) {
+  shared_semantic_map_interfaces::msg::LocalSemanticObject message;
+  message.local_object_id = object.local_object_id;
+  message.category_id = object.category_id;
+  message.status = static_cast<std::uint8_t>(object.status);
+  message.pose = ToPose(object.T_map_object);
+  message.axes.x = object.axes[0];
+  message.axes.y = object.axes[1];
+  message.axes.z = object.axes[2];
+  message.observation_count = object.observation_count;
+  message.keyframe_observation_count = object.keyframe_observation_count;
+  message.last_obs_score = object.last_obs_score;
+  message.last_obs_frame_id = object.last_obs_frame_id;
+  return message;
+}
+
+shared_semantic_map_interfaces::msg::LocalSemanticMapSnapshot
+ToLocalSemanticMapSnapshotMsg(const std_msgs::msg::Header& header,
+                              const PublisherParams& params,
+                              const oaslam::SemanticMapSnapshot& snapshot) {
+  shared_semantic_map_interfaces::msg::LocalSemanticMapSnapshot message;
+  message.header = header;
+  message.header.frame_id = params.world_frame_id;
+  message.agent_id = params.agent_id;
+  message.session_id = params.session_id;
+  message.map_id = snapshot.map_id;
+  message.sequence = snapshot.sequence;
+  message.objects.reserve(snapshot.objects.size());
+  for (const auto& object : snapshot.objects) {
+    message.objects.push_back(ToLocalSemanticObjectMsg(object));
+  }
+  return message;
+}
+
+shared_semantic_map_interfaces::msg::LocalSemanticMapDelta
+ToLocalSemanticMapDeltaMsg(const std_msgs::msg::Header& header,
+                           const PublisherParams& params,
+                           const oaslam::SemanticMapDelta& delta) {
+  shared_semantic_map_interfaces::msg::LocalSemanticMapDelta message;
+  message.header = header;
+  message.header.frame_id = params.world_frame_id;
+  message.agent_id = params.agent_id;
+  message.session_id = params.session_id;
+  message.map_id = delta.map_id;
+  message.sequence = delta.sequence;
+  message.reset = delta.reset;
+  message.added.reserve(delta.added.size());
+  for (const auto& object : delta.added) {
+    message.added.push_back(ToLocalSemanticObjectMsg(object));
+  }
+  message.updated.reserve(delta.updated.size());
+  for (const auto& object : delta.updated) {
+    message.updated.push_back(ToLocalSemanticObjectMsg(object));
   }
   message.removed_object_ids = delta.removed_object_ids;
   return message;

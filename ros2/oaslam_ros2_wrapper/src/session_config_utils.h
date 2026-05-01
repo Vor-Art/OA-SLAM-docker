@@ -1,6 +1,7 @@
 #ifndef OASLAM_ROS2_WRAPPER_SESSION_CONFIG_UTILS_H
 #define OASLAM_ROS2_WRAPPER_SESSION_CONFIG_UTILS_H
 
+#include <array>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -14,6 +15,9 @@
 #include <oaslam_ros2_wrapper/msg/semantic_map_snapshot.hpp>
 #include <oaslam_ros2_wrapper/msg/semantic_object.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <shared_semantic_map_interfaces/msg/local_semantic_map_delta.hpp>
+#include <shared_semantic_map_interfaces/msg/local_semantic_map_snapshot.hpp>
+#include <shared_semantic_map_interfaces/msg/local_semantic_object.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
@@ -31,9 +35,24 @@ struct PublisherParams {
   std::string semantic_map_snapshot_topic;
   std::string semantic_map_delta_topic;
   std::string semantic_map_markers_topic;
+  std::string local_semantic_map_snapshot_topic;
+  std::string local_semantic_map_delta_topic;
   std::string world_frame_id;
   std::string agent_id;
   std::string session_id;
+};
+
+struct DepthAlignmentParams {
+  bool enabled = false;
+  bool rotation_is_column_major = false;
+  double depth_unit_scale = 0.001;
+  std::array<double, 4> rgb_intrinsics{0.0, 0.0, 0.0, 0.0};
+  std::array<double, 4> depth_intrinsics{0.0, 0.0, 0.0, 0.0};
+  std::array<double, 9> depth_to_rgb_rotation{
+      1.0, 0.0, 0.0,
+      0.0, 1.0, 0.0,
+      0.0, 0.0, 1.0};
+  std::array<double, 3> depth_to_rgb_translation{0.0, 0.0, 0.0};
 };
 
 struct SharedTopicParams {
@@ -41,6 +60,7 @@ struct SharedTopicParams {
   std::string depth_topic;
   std::string imu_topic;
   std::string camera_id;
+  DepthAlignmentParams depth_alignment;
 };
 
 struct OnlineTopicParams {
@@ -52,6 +72,7 @@ struct OfflineTopicParams {
   SharedTopicParams shared;
   PublisherParams publisher;
   std::string bag_path;
+  double start_offset_sec = 0.0;
 };
 
 struct CommonSessionParams {
@@ -121,6 +142,19 @@ msg::SemanticMapDelta ToSemanticMapDeltaMsg(
     const std_msgs::msg::Header& header,
     const PublisherParams& params,
     const oaslam::SemanticMapDelta& delta);
+
+shared_semantic_map_interfaces::msg::LocalSemanticObject ToLocalSemanticObjectMsg(
+    const oaslam::SemanticObject& object);
+
+shared_semantic_map_interfaces::msg::LocalSemanticMapSnapshot
+ToLocalSemanticMapSnapshotMsg(const std_msgs::msg::Header& header,
+                              const PublisherParams& params,
+                              const oaslam::SemanticMapSnapshot& snapshot);
+
+shared_semantic_map_interfaces::msg::LocalSemanticMapDelta
+ToLocalSemanticMapDeltaMsg(const std_msgs::msg::Header& header,
+                           const PublisherParams& params,
+                           const oaslam::SemanticMapDelta& delta);
 
 visualization_msgs::msg::MarkerArray ToSemanticMapMarkers(
     const std_msgs::msg::Header& header,

@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <iostream>
 #include <memory>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -140,23 +143,30 @@ TrackingResult OrbSlam3BackendAdapter::processFrame(
   (void)pose_proposals;
 
   TrackingResult result;
+  std::string stage = "start";
 
+  try {
+  stage = "convert-detections";
   const auto legacy_detections = toLegacyDetections(detections);
 
-  // Call ORB-SLAM3 TrackRGBD with or without IMU data
+  // Call ORB-SLAM3 TrackRGBD with or without IMU data.
   Sophus::SE3f Tcw;
-  if (use_imu_ && frame.has_imu) {
+  if (use_imu_) {
+    stage = "convert-imu";
     auto imu_points =
         orbslam3_utils::ToImuPoints(frame.imu_measurements);
+    stage = "track-rgbd-imu";
     Tcw = system_->TrackRGBD(frame.image, frame.depth_image,
                              frame.timestamp, legacy_detections,
                              imu_points);
   } else {
+    stage = "track-rgbd";
     Tcw = system_->TrackRGBD(frame.image, frame.depth_image,
                              frame.timestamp, legacy_detections);
   }
 
   // Map the ORB-SLAM3 tracking state to our TrackingState enum
+  stage = "get-tracking-state";
   const int orbslam3_state = system_->GetTrackingState();
   result.state = mapTrackingState(orbslam3_state);
 
@@ -169,6 +179,7 @@ TrackingResult OrbSlam3BackendAdapter::processFrame(
     result.scene.T_world_camera = result.T_world_camera;
   }
 
+  stage = "get-current-map-id";
   result.semantic_map.sequence = ++semantic_sequence_;
   result.semantic_map_delta.sequence = semantic_sequence_;
   result.semantic_map.map_id = system_->GetCurrentMapId();
@@ -181,6 +192,7 @@ TrackingResult OrbSlam3BackendAdapter::processFrame(
   }
 
   std::unordered_map<unsigned int, SemanticObject> current_semantic_objects;
+  stage = "get-map-objects";
   const auto map_objects = system_->GetAllMapObjects();
   result.semantic_map.objects.reserve(map_objects.size());
   for (ORB_SLAM3::MapObject* map_object : map_objects) {
@@ -229,8 +241,11 @@ TrackingResult OrbSlam3BackendAdapter::processFrame(
             result.semantic_map_delta.removed_object_ids.end());
 
   // Extract tracked map points and keypoints
+  stage = "get-map-points";
   const auto map_points = system_->GetAllMapPoints();
+  stage = "get-tracked-map-points";
   const auto tracked_points = system_->GetTrackedMapPoints();
+  stage = "get-tracked-keypoints";
   const auto tracked_keypoints = system_->GetTrackedKeyPointsUn();
   result.scene.map_points.reserve(map_points.size());
   result.scene.new_map_points.reserve(map_points.size());
@@ -294,6 +309,17 @@ TrackingResult OrbSlam3BackendAdapter::processFrame(
   // isImuInitialized() or equivalent API. For now, approximate by checking
   // if the system has been running long enough with IMU data.
   result.imu_initialized = false;
+  } catch (const std::exception& exc) {
+    std::ostringstream context;
+    context << "ORB-SLAM3 backend processFrame failed"
+            << " | stage=" << stage
+            << " | frame=" << frame.frame_id
+            << " | t=" << frame.timestamp
+            << " | imu=" << frame.imu_measurements.size()
+            << " | detections=" << detections.size()
+            << " | err=" << exc.what();
+    throw std::runtime_error(context.str());
+  }
 
   return result;
 }
@@ -312,14 +338,20 @@ void OrbSlam3BackendAdapter::shutdown() {
   if (shutdown_called_) {
     return;
   }
+  shutdown_called_ = true;
   if (system_) {
-    system_->Shutdown();
+    try {
+      system_->Shutdown();
+    } catch (const std::exception& exc) {
+      std::cerr << "ORB-SLAM3 shutdown warning: " << exc.what() << std::endl;
+    } catch (...) {
+      std::cerr << "ORB-SLAM3 shutdown warning: unknown exception" << std::endl;
+    }
   }
   last_semantic_objects_.clear();
   last_semantic_map_id_ = 0;
   semantic_sequence_ = 0;
   seen_map_point_ids_.clear();
-  shutdown_called_ = true;
 }
 
 bool OrbSlam3BackendAdapter::shouldQuit() const {
