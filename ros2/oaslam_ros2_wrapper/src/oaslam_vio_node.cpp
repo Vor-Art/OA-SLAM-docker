@@ -221,7 +221,9 @@ class OaSlamVioNode : public rclcpp::Node {
 
     PublishSemanticMap(rgb_msg->header, result.tracking);
 
-    if (!result.tracking.has_pose) {
+    if (!result.tracking.has_pose ||
+        (runtime_.session_params.use_imu &&
+         !result.tracking.imu_initialized)) {
       return;
     }
 

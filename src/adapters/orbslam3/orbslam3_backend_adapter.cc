@@ -305,10 +305,7 @@ TrackingResult OrbSlam3BackendAdapter::processFrame(
     }
   }
 
-  // TODO(T2.6): Check IMU initialization status when ORB-SLAM3 exposes
-  // isImuInitialized() or equivalent API. For now, approximate by checking
-  // if the system has been running long enough with IMU data.
-  result.imu_initialized = false;
+  result.imu_initialized = use_imu_ && system_->IsImuInitialized();
   } catch (const std::exception& exc) {
     std::ostringstream context;
     context << "ORB-SLAM3 backend processFrame failed"
@@ -335,11 +332,8 @@ void OrbSlam3BackendAdapter::reset() {
 }
 
 void OrbSlam3BackendAdapter::shutdown() {
-  if (shutdown_called_) {
-    return;
-  }
-  shutdown_called_ = true;
-  if (system_) {
+  if (system_ && !shutdown_called_) {
+    shutdown_called_ = true;
     try {
       system_->Shutdown();
     } catch (const std::exception& exc) {
@@ -352,6 +346,27 @@ void OrbSlam3BackendAdapter::shutdown() {
   last_semantic_map_id_ = 0;
   semantic_sequence_ = 0;
   seen_map_point_ids_.clear();
+}
+
+bool OrbSlam3BackendAdapter::saveFinalTrajectory(
+    const std::string& frame_trajectory_path,
+    const std::string& keyframe_trajectory_path) {
+  if (!system_) {
+    return false;
+  }
+
+  if (!shutdown_called_) {
+    shutdown_called_ = true;
+    system_->Shutdown();
+  }
+
+  if (!frame_trajectory_path.empty()) {
+    system_->SaveTrajectoryTUM(frame_trajectory_path);
+  }
+  if (!keyframe_trajectory_path.empty()) {
+    system_->SaveKeyFrameTrajectoryTUM(keyframe_trajectory_path);
+  }
+  return true;
 }
 
 bool OrbSlam3BackendAdapter::shouldQuit() const {

@@ -1,6 +1,8 @@
 #ifndef OASLAM_APP_SLAM_SESSION_H
 #define OASLAM_APP_SLAM_SESSION_H
 
+#include <string>
+
 #include "oaslam/app/module_factories.h"
 #include "oaslam/core/visualization_types.h"
 
@@ -13,6 +15,8 @@ class SlamSession {
   SessionFrameResult processFrame(const FramePacket& frame);
   void reset();
   void shutdown();
+  bool saveFinalTrajectory(const std::string& frame_trajectory_path,
+                           const std::string& keyframe_trajectory_path);
 
   /// Returns the number of keyframes waiting in the SLAM backend's local
   /// mapping queue. Returns 0 if the backend does not support this query.

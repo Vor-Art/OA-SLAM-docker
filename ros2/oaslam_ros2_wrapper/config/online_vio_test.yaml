@@ -1,11 +1,9 @@
-oaslam_offline_vio_node:
+oaslam_vio_node:
   ros__parameters:
     # Input
     rgb_topic: "/camera/color/image_raw"
     depth_topic: "/camera/aligned_depth_to_color/image_raw"
     imu_topic: "/camera/imu"
-    bag_path: "/opt/OA-SLAM/Data/scripts/Data/record_20260502_034715/bag"
-
     # Publishers
     pose_topic: "/oa_slam/camera_pose"
     world_frame_id: "map"
@@ -18,7 +16,7 @@ oaslam_offline_vio_node:
     camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/record_dataset_1_d435i_imu_rgbd.yaml"
     use_viewer: true
     use_imu: false
-    use_sim_time: false
+    use_sim_time: true
 
     # Observation Source
     observation_mode: "onnx"  # "onnx", "file", or "none"
@@ -30,4 +28,4 @@ oaslam_offline_vio_node:
     relocalization_mode: "points_and_objects"  # "points", "objects", or "points_and_objects"
 
     # Output
-    output_folder: "/opt/OA-SLAM/Data/run/realsense_test/offline_vo_test"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format
+    output_folder: "/opt/OA-SLAM/Data/run/dynamic_robot_4/online_vio_test"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format

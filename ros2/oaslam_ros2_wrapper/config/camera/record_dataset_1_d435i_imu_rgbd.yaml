@@ -84,34 +84,34 @@ Camera.bf: 30.25972900390625
 #--------------------------------------------------------------------------------------------
 # IMU Parameters: Intel RealSense D435i
 #--------------------------------------------------------------------------------------------
-IMU.NoiseGyro: 1.7e-4
-IMU.NoiseAcc: 2.0e-3
-IMU.GyroWalk: 1.9393e-5
-IMU.AccWalk: 3.0e-3
+IMU.NoiseGyro: 5.0e-4
+IMU.NoiseAcc: 1.0e-2
+IMU.GyroWalk: 5.0e-5
+IMU.AccWalk: 1.0e-2
 IMU.Frequency: 200.0
 IMU.InsertKFsWhenLost: 1
 # The recorded segment can have low acceleration excitation; let ORB-SLAM3
 # initialize inertial RGB-D without rejecting it on the acceleration delta test.
-IMU.fastInit: 1
+IMU.fastInit: true
 
 #--------------------------------------------------------------------------------------------
 # IMU Extrinsics
 #--------------------------------------------------------------------------------------------
 # T_b_c from camera_color_optical_frame to camera_imu_optical_frame, derived
-# from recorded depth_to_gyro and depth_to_color stream extrinsics.
+# from the recorded TF tree. ORB-SLAM3 expects camera-to-body (IMU) here.
 IMU.T_b_c: !!opencv-matrix
   rows: 4
   cols: 4
   dt: f
-  data: [ 0.9999053478240967, 0.01281267311424017, 0.005002756603062153, -0.02041587457312365,
-          -0.012793170288205147, 0.9999105334281921, -0.00391092523932457, 0.00548654410263758,
-          -0.005052417982369661, 0.0038465538527816534, 0.9999798536300659, 0.0116699645621655,
+  data: [ 0.9999053478240967, -0.012793170288205147, -0.005052417982369661, -0.0204194100,
+          0.01281267311424017, 0.9999105334281921, 0.0038465538527816534, 0.0051039080,
+          0.005002756603062153, -0.00391092523932457, 0.9999798536300659, 0.0115186360,
           0.0, 0.0, 0.0, 1.0 ]
 
 #--------------------------------------------------------------------------------------------
 # ORB Parameters
 #--------------------------------------------------------------------------------------------
-ORBextractor.nFeatures: 1500
+ORBextractor.nFeatures: 1700
 ORBextractor.scaleFactor: 1.2
 ORBextractor.nLevels: 8
 

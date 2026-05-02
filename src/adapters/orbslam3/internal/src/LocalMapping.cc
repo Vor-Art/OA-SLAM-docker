@@ -30,8 +30,8 @@
 namespace ORB_SLAM3
 {
 
-LocalMapping::LocalMapping(System* pSys, Atlas *pAtlas, const float bMonocular, bool bInertial, const string &_strSeqName):
-    mpSystem(pSys), mbMonocular(bMonocular), mbInertial(bInertial), mbResetRequested(false), mbResetRequestedActiveMap(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas), bInitializing(false),
+LocalMapping::LocalMapping(System* pSys, Atlas *pAtlas, const float bMonocular, bool bInertial, bool bFastImuInit, const string &_strSeqName):
+    mpSystem(pSys), mbMonocular(bMonocular), mbInertial(bInertial), mbFastImuInit(bFastImuInit), mbResetRequested(false), mbResetRequestedActiveMap(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas), bInitializing(false),
     mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true),
     mIdxInit(0), mScale(1.0), mInitSect(0), mbNotBA1(true), mbNotBA2(true), mIdxIteration(0), infoInertial(Eigen::MatrixXd::Zero(9,9))
 {
@@ -138,7 +138,10 @@ void LocalMapping::Run()
                                 mTinit += mpCurrentKeyFrame->mTimeStamp - mpCurrentKeyFrame->mPrevKF->mTimeStamp;
                             if(!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
                             {
-                                if((mTinit<20.f) && (dist<0.005))
+                                // Fast inertial initialization is used for low-excitation
+                                // metric RGB-D/stereo sequences. In that mode, low
+                                // translation alone should not invalidate the map.
+                                if(!mbFastImuInit && (mTinit<20.f) && (dist<0.005))
                                 {
                                     cout << "Not enough motion for initializing. Reseting..." << endl;
                                     unique_lock<mutex> lock(mMutexReset);

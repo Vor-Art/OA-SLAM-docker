@@ -246,13 +246,12 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     uint64_t total_frames_skipped_no_depth = 0;
     uint64_t total_poses_obtained = 0;
     uint64_t total_poses_interpolated = 0;
+    uint64_t total_poses_waiting_imu = 0;
+    uint64_t total_trajectory_lines_written = 0;
     uint64_t total_imu_in_bag = 0;
     uint64_t total_depth_in_bag = 0;
     uint64_t imu_nan_filtered = 0;
     uint64_t total_ignored_messages = 0;
-
-    // Last known good pose
-    oaslam::Transform4d last_known_pose = oaslam::Transform4d::eye();
 
     bool quit_requested = false;
     bool finish_time_reached = false;
@@ -390,10 +389,6 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           RCLCPP_WARN(get_logger(), "Frame skipped | id=%lu | rgb-convert err=%s",
                       static_cast<unsigned long>(frame_counter), exc.what());
           total_poses_interpolated++;
-          if (runtime_.tum_trajectory_file.is_open()) {
-            oaslam_ros2_wrapper::WriteTumPoseLine(
-                runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
-          }
           frame_counter++;
           continue;
         }
@@ -425,12 +420,7 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
             RCLCPP_WARN(get_logger(), "Further no-depth skip warnings suppressed");
           }
 
-          // Write fallback trajectory line for skipped frame
           total_poses_interpolated++;
-          if (runtime_.tum_trajectory_file.is_open()) {
-            oaslam_ros2_wrapper::WriteTumPoseLine(
-                runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
-          }
           frame_counter++;
           continue;  // SKIP — do NOT pass null depth to SLAM
         }
@@ -477,10 +467,6 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         if (!has_depth) {
           total_frames_skipped_no_depth++;
           total_poses_interpolated++;
-          if (runtime_.tum_trajectory_file.is_open()) {
-            oaslam_ros2_wrapper::WriteTumPoseLine(
-                runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
-          }
           frame_counter++;
           continue;  // SKIP — do NOT pass invalid depth to SLAM
         }
@@ -552,10 +538,20 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           PublishSemanticMap(rgb_msg->header, result.tracking);
         }
 
-        // ── 12. Write trajectory line (ALWAYS — 1:1 with RGB images) ──
-        if (result.tracking.has_pose) {
+        // ── 12. Write trajectory line ──
+        const bool pose_ready_for_output =
+            result.tracking.has_pose &&
+            (!runtime_.session_params.use_imu ||
+             result.tracking.imu_initialized);
+        if (pose_ready_for_output) {
           total_poses_obtained++;
-          last_known_pose = result.tracking.T_world_camera;
+          if (runtime_.tum_trajectory_file.is_open()) {
+            last_stage = "write-trajectory";
+            oaslam_ros2_wrapper::WriteTumPoseLine(
+                runtime_.tum_trajectory_file, image_timestamp,
+                result.tracking.T_world_camera);
+            total_trajectory_lines_written++;
+          }
           if (!shutdown_requested_->load() && rclcpp::ok()) {
             last_stage = "publish-tracking-output";
             pose_publisher_->publish(oaslam_ros2_wrapper::ToPoseStamped(
@@ -574,14 +570,12 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                     rgb_msg->header, topics_.publisher.world_frame_id,
                     result.tracking.scene.visible_map_points));
           }
+        } else if (result.tracking.has_pose &&
+                   runtime_.session_params.use_imu &&
+                   !result.tracking.imu_initialized) {
+          total_poses_waiting_imu++;
         } else {
           total_poses_interpolated++;
-        }
-
-        if (runtime_.tum_trajectory_file.is_open()) {
-          last_stage = "write-trajectory";
-          oaslam_ros2_wrapper::WriteTumPoseLine(
-              runtime_.tum_trajectory_file, image_timestamp, last_known_pose);
         }
 
         // ── 13. Progress logging ──
@@ -589,16 +583,17 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
           auto now = std::chrono::steady_clock::now();
           double total_sec = std::chrono::duration<double>(now - wall_start).count();
           double fps = total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0;
-          std::printf("Progress | frames=%lu tracked=%lu fallback=%lu skip_no_depth=%lu fps=%.1f\n",
+          std::printf("Progress | frames=%lu tracked=%lu wait_imu=%lu fallback=%lu skip_no_depth=%lu fps=%.1f\n",
                       static_cast<unsigned long>(total_frames_processed),
                       static_cast<unsigned long>(total_poses_obtained),
+                      static_cast<unsigned long>(total_poses_waiting_imu),
                       static_cast<unsigned long>(total_poses_interpolated),
                       static_cast<unsigned long>(total_frames_skipped_no_depth),
                       fps);
           std::printf(
             "Offline VIO TMP PROGRESS | rgb=%lu depth=%lu imu=%lu imu_nan=%lu "
-            "processed=%lu tracked=%lu fallback=%lu skip_no_depth=%lu "
-            "skip_start_offset=%lu imu_preroll=%lu traj=%lu "
+            "processed=%lu tracked=%lu wait_imu=%lu fallback=%lu skip_no_depth=%lu "
+            "skip_start_offset=%lu imu_preroll=%lu traj_lines=%lu "
             "total_time=%.1fs fps=%.1f\n",
             static_cast<unsigned long>(total_rgb_in_bag),
             static_cast<unsigned long>(total_depth_in_bag),
@@ -606,11 +601,12 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
             static_cast<unsigned long>(imu_nan_filtered),
             static_cast<unsigned long>(total_frames_processed),
             static_cast<unsigned long>(total_poses_obtained),
+            static_cast<unsigned long>(total_poses_waiting_imu),
             static_cast<unsigned long>(total_poses_interpolated),
             static_cast<unsigned long>(total_frames_skipped_no_depth),
             static_cast<unsigned long>(total_messages_skipped_start_offset),
             static_cast<unsigned long>(total_imu_preroll),
-            static_cast<unsigned long>(total_rgb_in_bag),
+            static_cast<unsigned long>(total_trajectory_lines_written),
             total_sec, fps
         );
         }
@@ -653,8 +649,8 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
 
     std::printf(
         "Offline VIO done | rgb=%lu depth=%lu imu=%lu imu_nan=%lu "
-        "processed=%lu tracked=%lu fallback=%lu skip_no_depth=%lu "
-        "skip_start_offset=%lu imu_preroll=%lu traj=%lu "
+        "processed=%lu tracked=%lu wait_imu=%lu fallback=%lu skip_no_depth=%lu "
+        "skip_start_offset=%lu imu_preroll=%lu traj_lines=%lu "
         "total_time=%.1fs fps=%.1f\n",
         static_cast<unsigned long>(total_rgb_in_bag),
         static_cast<unsigned long>(total_depth_in_bag),
@@ -662,11 +658,12 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         static_cast<unsigned long>(imu_nan_filtered),
         static_cast<unsigned long>(total_frames_processed),
         static_cast<unsigned long>(total_poses_obtained),
+        static_cast<unsigned long>(total_poses_waiting_imu),
         static_cast<unsigned long>(total_poses_interpolated),
         static_cast<unsigned long>(total_frames_skipped_no_depth),
         static_cast<unsigned long>(total_messages_skipped_start_offset),
         static_cast<unsigned long>(total_imu_preroll),
-        static_cast<unsigned long>(total_rgb_in_bag),
+        static_cast<unsigned long>(total_trajectory_lines_written),
         total_sec,
         total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0
     );

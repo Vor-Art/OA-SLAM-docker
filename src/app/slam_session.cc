@@ -79,6 +79,16 @@ void SlamSession::shutdown() {
   is_shutdown_ = true;
 }
 
+bool SlamSession::saveFinalTrajectory(
+    const std::string& frame_trajectory_path,
+    const std::string& keyframe_trajectory_path) {
+  if (modules_.slam_backend) {
+    return modules_.slam_backend->saveFinalTrajectory(
+        frame_trajectory_path, keyframe_trajectory_path);
+  }
+  return false;
+}
+
 int SlamSession::keyframesInQueue() const {
   if (modules_.slam_backend) {
     return modules_.slam_backend->keyframesInQueue();

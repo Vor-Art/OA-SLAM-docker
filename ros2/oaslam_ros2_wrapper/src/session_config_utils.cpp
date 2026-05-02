@@ -466,7 +466,8 @@ NodeRuntime CreateNodeRuntime(rclcpp::Node& node) {
   const std::string tum_path = OpenTumTrajectoryFile(
       runtime.tum_trajectory_file, runtime.session_params.output_folder);
   if (!tum_path.empty()) {
-    RCLCPP_INFO(node.get_logger(), "Trajectory output | tum=%s", tum_path.c_str());
+    RCLCPP_INFO(node.get_logger(), "Realtime trajectory output | tum=%s",
+                tum_path.c_str());
   }
 
   const oaslam::SessionConfig session_config =
@@ -548,6 +549,30 @@ void ShutdownNodeRuntime(NodeRuntime& runtime, const rclcpp::Logger& logger) {
   }
 
   if (runtime.session) {
+    if (!IsEmptyPath(runtime.session_params.output_folder)) {
+      const std::filesystem::path output_dir(runtime.session_params.output_folder);
+      const std::filesystem::path final_trajectory_path =
+          output_dir / "CameraTrajectory_optimized.txt";
+      const std::filesystem::path final_keyframe_path =
+          output_dir / "KeyFrameTrajectory_optimized.txt";
+      try {
+        if (runtime.session->saveFinalTrajectory(final_trajectory_path.string(),
+                                                 final_keyframe_path.string())) {
+          RCLCPP_INFO(logger,
+                      "Final optimized trajectories saved | tum=%s keyframes=%s",
+                      final_trajectory_path.string().c_str(),
+                      final_keyframe_path.string().c_str());
+        }
+      } catch (const std::exception& exc) {
+        RCLCPP_WARN(logger,
+                    "Final optimized trajectory save raised | err=%s",
+                    exc.what());
+      } catch (...) {
+        RCLCPP_WARN(logger,
+                    "Final optimized trajectory save raised | err=unknown");
+      }
+    }
+
     try {
       runtime.session->shutdown();
     } catch (const std::exception& exc) {

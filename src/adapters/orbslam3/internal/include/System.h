@@ -207,6 +207,7 @@ public:
 
     // For debugging
     double GetTimeFromIMUInit();
+    bool IsImuInitialized();
     bool isLost();
     bool isFinished();
 

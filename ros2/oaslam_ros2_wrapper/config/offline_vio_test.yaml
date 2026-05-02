@@ -4,9 +4,7 @@ oaslam_offline_vio_node:
     rgb_topic: "/camera/color/image_raw"
     depth_topic: "/camera/aligned_depth_to_color/image_raw"
     imu_topic: "/camera/imu"
-    bag_path: "/opt/OA-SLAM/Data/realsense_recording/test_realsense/bag"
-    start_offset_sec: 0.0
-    finish_time_sec: -1.0
+    bag_path: "/opt/OA-SLAM/Data/scripts/Data/record_20260502_034715/bag"
 
     # Publishers
     pose_topic: "/oa_slam/camera_pose"
@@ -32,4 +30,4 @@ oaslam_offline_vio_node:
     relocalization_mode: "points_and_objects"  # "points", "objects", or "points_and_objects"
 
     # Output
-    output_folder: "/opt/OA-SLAM/Data/run/dynamic_robot_4/offline_vio_test"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format
+    output_folder: "/opt/OA-SLAM/Data/run/realsense_test/offline_vio_test"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format

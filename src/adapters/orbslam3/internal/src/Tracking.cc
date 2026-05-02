@@ -72,9 +72,7 @@ const char* TrackingStateName(Tracking::eTrackingState state) {
     }
 }
 
-const char* BoolFlag(bool value) {
-    return value ? "yes" : "no";
-}
+constexpr float kMinFastInitImuDurationSec = 0.2f;
 
 }
 
@@ -2928,6 +2926,14 @@ void Tracking::StereoInitialization()
             if (!mCurrentFrame.mpImuPreintegrated || (!mFastInit && !mLastFrame.mpImuPreintegrated))
             {
                 cout << "not enough IMU preintegration for initialization" << endl;
+                return;
+            }
+
+            if (mFastInit && (mCurrentFrame.mpImuPreintegrated->dT <
+                kMinFastInitImuDurationSec ||
+                mCurrentFrame.mpImuPreintegrated->avgA.norm() < 1e-6f))
+            {
+                cout << "not enough IMU preintegration for fast initialization" << endl;
                 return;
             }
 
