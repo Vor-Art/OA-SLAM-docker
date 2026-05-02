@@ -67,7 +67,7 @@ IMU.GyroWalk: 1.9393e-5
 IMU.AccWalk: 3.0e-3
 IMU.Frequency: 200.0
 IMU.InsertKFsWhenLost: 1
-IMU.fastInit: false
+IMU.fastInit: true
 
 #--------------------------------------------------------------------------------------------
 # IMU Extrinsics

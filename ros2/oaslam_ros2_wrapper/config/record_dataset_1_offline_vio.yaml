@@ -7,6 +7,7 @@ oaslam_offline_vio_node:
     camera_id: "record_dataset_1"
     bag_path: "/opt/OA-SLAM/Data/record_dataset_1"
     start_offset_sec: 40.0
+    finish_time_sec: 55.0
 
     # Register raw depth pixels into the RGB optical frame before RGB-D SLAM.
     depth_alignment_enabled: true

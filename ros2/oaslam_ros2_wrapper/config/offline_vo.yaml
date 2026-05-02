@@ -19,7 +19,7 @@ oaslam_offline_vio_node:
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
     camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/d435i_imu_rgbd.yaml"
     use_viewer: true
-    use_imu: true
+    use_imu: false
     use_sim_time: false
 
     # Observation Source
@@ -32,4 +32,4 @@ oaslam_offline_vio_node:
     relocalization_mode: "points_and_objects"  # "points", "objects", or "points_and_objects"
 
     # Output
-    output_folder: "/opt/OA-SLAM/Data/run/dynamic_robot_4/offline_vio"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format
+    output_folder: "/opt/OA-SLAM/Data/run/dynamic_robot_4/offline_vo"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format

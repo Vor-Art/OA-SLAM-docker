@@ -158,6 +158,10 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         get_logger(), "offline VIO", runtime_.session_params,
         {{"Bag path", topics_.bag_path},
          {"Start offset sec", std::to_string(topics_.start_offset_sec)},
+         {"Finish time sec",
+          topics_.finish_time_sec >= 0.0
+              ? std::to_string(topics_.finish_time_sec)
+              : std::string("disabled")},
          {"RGB topic", topics_.shared.rgb_topic},
          {"Depth topic", topics_.shared.depth_topic},
          {"IMU topic", topics_.shared.imu_topic},
@@ -251,14 +255,21 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
     oaslam::Transform4d last_known_pose = oaslam::Transform4d::eye();
 
     bool quit_requested = false;
+    bool finish_time_reached = false;
     int64_t bag_start_nanos = -1;
     int64_t start_time_nanos = std::numeric_limits<int64_t>::min();
+    int64_t finish_time_nanos = std::numeric_limits<int64_t>::max();
     uint64_t total_messages_skipped_start_offset = 0;
     uint64_t total_imu_preroll = 0;
     auto wall_start = std::chrono::steady_clock::now();
+    const std::string finish_time_label =
+        topics_.finish_time_sec >= 0.0
+            ? std::to_string(topics_.finish_time_sec)
+            : std::string("disabled");
 
-    RCLCPP_INFO(get_logger(), "Bag playback started | start_offset_sec=%.3f",
-                topics_.start_offset_sec);
+    RCLCPP_INFO(get_logger(),
+                "Bag playback started | start_offset_sec=%.3f | finish_time_sec=%s",
+                topics_.start_offset_sec, finish_time_label.c_str());
 
     // ── Single-pass streaming loop ──
     // The rosbag2 sequential reader delivers messages in storage order
@@ -292,9 +303,18 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         start_time_nanos =
             bag_start_nanos +
             static_cast<int64_t>(topics_.start_offset_sec * 1e9);
+        if (topics_.finish_time_sec >= 0.0) {
+          finish_time_nanos =
+              bag_start_nanos +
+              static_cast<int64_t>(topics_.finish_time_sec * 1e9);
+        }
       }
       const std::string& topic = bag_msg->topic_name;
       last_topic = topic;
+      if (bag_msg->time_stamp > finish_time_nanos) {
+        finish_time_reached = true;
+        break;
+      }
       if (bag_msg->time_stamp < start_time_nanos) {
         total_messages_skipped_start_offset++;
         if (runtime_.session_params.use_imu &&
@@ -625,6 +645,10 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
 
     if (!rclcpp::ok() && !quit_requested) {
       RCLCPP_INFO(get_logger(), "Bag playback stopped | reason=shutdown");
+    }
+    if (finish_time_reached) {
+      RCLCPP_INFO(get_logger(), "Bag playback stopped | reason=finish_time_sec | finish_time_sec=%.3f",
+                  topics_.finish_time_sec);
     }
 
     std::printf(

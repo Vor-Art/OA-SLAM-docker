@@ -29,4 +29,4 @@ oaslam_vio_node:
     relocalization_mode: "points_and_objects"  # "points", "objects", or "points_and_objects"
 
     # Output
-    output_folder: "/opt/OA-SLAM/Data/run/"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format
+    output_folder: "/opt/OA-SLAM/Data/run/dynamic_arm"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format

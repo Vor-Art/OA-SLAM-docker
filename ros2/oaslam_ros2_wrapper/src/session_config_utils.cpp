@@ -426,6 +426,13 @@ OfflineTopicParams DeclareOfflineTopicParameters(rclcpp::Node& node) {
   if (params.start_offset_sec < 0.0) {
     throw std::runtime_error("start_offset_sec must be non-negative");
   }
+  params.finish_time_sec =
+      node.declare_parameter<double>("finish_time_sec", -1.0);
+  if (params.finish_time_sec >= 0.0 &&
+      params.finish_time_sec < params.start_offset_sec) {
+    throw std::runtime_error(
+        "finish_time_sec must be greater than or equal to start_offset_sec when set");
+  }
   return params;
 }
 

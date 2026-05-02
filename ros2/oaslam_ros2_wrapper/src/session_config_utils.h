@@ -73,6 +73,7 @@ struct OfflineTopicParams {
   PublisherParams publisher;
   std::string bag_path;
   double start_offset_sec = 0.0;
+  double finish_time_sec = -1.0;
 };
 
 struct CommonSessionParams {
