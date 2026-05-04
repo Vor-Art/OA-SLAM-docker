@@ -1,3 +1,4 @@
 build/
 Data/
 __pycache__
+ros2/oaslam_ros2_wrapper/config/.generated/

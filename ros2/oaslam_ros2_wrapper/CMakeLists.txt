@@ -52,17 +52,17 @@ ament_target_dependencies(oaslam_ros2_wrapper_common
 rosidl_target_interfaces(oaslam_ros2_wrapper_common
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-add_executable(scout_slam_node
-  src/scout_slam_node.cpp
+add_executable(oaslam_vio_node
+  src/oaslam_vio_node.cpp
 )
 
-target_link_libraries(scout_slam_node
+target_link_libraries(oaslam_vio_node
   Eigen3::Eigen
   oaslam::oaslam_sdk
   oaslam_ros2_wrapper_common
 )
 
-ament_target_dependencies(scout_slam_node
+ament_target_dependencies(oaslam_vio_node
   cv_bridge
   geometry_msgs
   message_filters
@@ -72,20 +72,20 @@ ament_target_dependencies(scout_slam_node
   std_msgs
   visualization_msgs
 )
-rosidl_target_interfaces(scout_slam_node
+rosidl_target_interfaces(oaslam_vio_node
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-add_executable(scout_slam_node
-  src/scout_slam_node.cpp
+add_executable(oaslam_offline_vio_node
+  src/oaslam_offline_vio_node.cpp
 )
 
-target_link_libraries(scout_slam_node
+target_link_libraries(oaslam_offline_vio_node
   Eigen3::Eigen
   oaslam::oaslam_sdk
   oaslam_ros2_wrapper_common
 )
 
-ament_target_dependencies(scout_slam_node
+ament_target_dependencies(oaslam_offline_vio_node
   cv_bridge
   geometry_msgs
   rclcpp
@@ -96,10 +96,10 @@ ament_target_dependencies(scout_slam_node
   std_msgs
   visualization_msgs
 )
-rosidl_target_interfaces(scout_slam_node
+rosidl_target_interfaces(oaslam_offline_vio_node
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-install(TARGETS scout_slam_node scout_slam_node
+install(TARGETS oaslam_vio_node oaslam_offline_vio_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
