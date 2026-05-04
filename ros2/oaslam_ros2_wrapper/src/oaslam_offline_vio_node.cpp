@@ -118,7 +118,7 @@ std::string TopicSummary(const std::map<std::string, std::string>& topic_type_ma
 class OaSlamOfflineVioNode : public rclcpp::Node {
  public:
   explicit OaSlamOfflineVioNode(const rclcpp::NodeOptions& options)
-      : rclcpp::Node("oaslam_offline_vio_node", options) {
+      : rclcpp::Node("scout_slam_node", options) {
     topics_ = oaslam_ros2_wrapper::DeclareOfflineTopicParameters(*this);
     runtime_ = oaslam_ros2_wrapper::CreateNodeRuntime(*this);
     rclcpp::on_shutdown(
@@ -730,7 +730,7 @@ int main(int argc, char** argv) {
     node->Run();
 
   } catch (const std::exception& exc) {
-    RCLCPP_FATAL(rclcpp::get_logger("oaslam_offline_vio_node"),
+    RCLCPP_FATAL(rclcpp::get_logger("scout_slam_node"),
                  "Offline VIO failed | err=%s", exc.what());
     rclcpp::shutdown();
     return 1;

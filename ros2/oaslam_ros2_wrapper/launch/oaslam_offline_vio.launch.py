@@ -44,8 +44,8 @@ def generate_launch_description():
             ),
             Node(
                 package="oaslam_ros2_wrapper",
-                executable="oaslam_offline_vio_node",
-                name="oaslam_offline_vio_node",
+                executable="scout_slam_node",
+                name="scout_slam_node",
                 output="screen",
                 parameters=[
                     LaunchConfiguration("params_file"),

@@ -32,7 +32,7 @@ class OaSlamVioNode : public rclcpp::Node {
                                                       sensor_msgs::msg::Image>;
 
   explicit OaSlamVioNode(const rclcpp::NodeOptions& options)
-      : rclcpp::Node("oaslam_vio_node", options) {
+      : rclcpp::Node("scout_slam_node", options) {
     topics_ = oaslam_ros2_wrapper::DeclareOnlineTopicParameters(*this);
     runtime_ = oaslam_ros2_wrapper::CreateNodeRuntime(*this);
     rclcpp::on_shutdown(
@@ -335,7 +335,7 @@ int main(int argc, char** argv) {
     auto node = std::make_shared<OaSlamVioNode>(rclcpp::NodeOptions{});
     rclcpp::spin(node);
   } catch (const std::exception& exc) {
-    RCLCPP_FATAL(rclcpp::get_logger("oaslam_vio_node"), "Startup failed | err=%s",
+    RCLCPP_FATAL(rclcpp::get_logger("scout_slam_node"), "Startup failed | err=%s",
                  exc.what());
     rclcpp::shutdown();
     return 1;
