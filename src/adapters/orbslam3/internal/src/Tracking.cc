@@ -621,6 +621,11 @@ void Tracking::newParameterLoader(Settings *settings) {
     mMaxFrames = settings->fps();
     mbRGB = settings->rgb();
     center_reprojection_threshold_px_ = settings->centerReprojectionThresholdPx();
+    far_object_depth_threshold_m_ = settings->farObjectDepthThresholdM();
+    far_center_reprojection_threshold_px_ = settings->farCenterReprojectionThresholdPx();
+    min_reconstruction_angle_rad_ = settings->minReconstructionAngleRad();
+    min_init_observations_ = settings->minInitObservations();
+    initialized_refine_every_n_ = settings->initializedRefineEveryN();
     frame_report_interval_ = settings->frameReportInterval();
 
     //ORB parameters
@@ -1219,6 +1224,60 @@ bool Tracking::ParseCamParamFile(cv::FileStorage &fSettings)
     {
         center_reprojection_threshold_px_ = 100.0f;
     }
+    cv::FileNode far_object_depth_threshold_node =
+        fSettings["Detector.FarObjectDepthThresholdM"];
+    if(!far_object_depth_threshold_node.empty() && far_object_depth_threshold_node.isReal())
+    {
+        far_object_depth_threshold_m_ = far_object_depth_threshold_node.real();
+    }
+    else
+    {
+        far_object_depth_threshold_m_ = 2.0f;
+    }
+    cv::FileNode far_center_reprojection_threshold_node =
+        fSettings["Detector.FarCenterReprojectionThresholdPx"];
+    if(!far_center_reprojection_threshold_node.empty() && far_center_reprojection_threshold_node.isReal())
+    {
+        far_center_reprojection_threshold_px_ = far_center_reprojection_threshold_node.real();
+    }
+    else
+    {
+        far_center_reprojection_threshold_px_ = 140.0f;
+    }
+    cv::FileNode min_reconstruction_angle_node =
+        fSettings["Detector.MinReconstructionAngleDeg"];
+    float min_reconstruction_angle_deg = 5.0f;
+    if(!min_reconstruction_angle_node.empty() && min_reconstruction_angle_node.isReal())
+    {
+        min_reconstruction_angle_deg = min_reconstruction_angle_node.real();
+    }
+    if(min_reconstruction_angle_deg < 0.1f)
+        min_reconstruction_angle_deg = 0.1f;
+    min_reconstruction_angle_rad_ = 0.01745329251f * min_reconstruction_angle_deg;
+    cv::FileNode min_init_observations_node =
+        fSettings["Detector.MinInitObservations"];
+    if(!min_init_observations_node.empty() && min_init_observations_node.isInt())
+    {
+        min_init_observations_ = min_init_observations_node.operator int();
+    }
+    else
+    {
+        min_init_observations_ = 6;
+    }
+    if(min_init_observations_ < 2)
+        min_init_observations_ = 2;
+    cv::FileNode initialized_refine_every_node =
+        fSettings["Detector.InitializedRefineEveryN"];
+    if(!initialized_refine_every_node.empty() && initialized_refine_every_node.isInt())
+    {
+        initialized_refine_every_n_ = initialized_refine_every_node.operator int();
+    }
+    else
+    {
+        initialized_refine_every_n_ = 2;
+    }
+    if(initialized_refine_every_n_ < 0)
+        initialized_refine_every_n_ = 0;
     cv::FileNode frame_report_interval_node = fSettings["Debug.FrameReportInterval"];
     if(!frame_report_interval_node.empty() && frame_report_interval_node.isInt())
     {
@@ -2779,12 +2838,17 @@ void Tracking::Track()
                         for (auto& tr : objectTracks_) {
                             if (tr->GetLastObsFrameId() == current_frame_idx_) {
                                 // Try reconstruct from points
-                                if ((tr->GetNbObservations() > 10 && tr->GetStatus() == ObjectTrackStatus::ONLY_2D) ||
-                                    (tr->GetNbObservations() % 2 == 0 && tr->GetStatus() == ObjectTrackStatus::INITIALIZED)) {
-
-                                bool status_rec = tr->ReconstructFromCenter();
-                                if (status_rec && pCurMap)
-                                    tr->OptimizeReconstruction(pCurMap);
+                                const bool should_initialize =
+                                    tr->GetNbObservations() >= static_cast<size_t>(GetMinInitObservations()) &&
+                                    tr->GetStatus() == ObjectTrackStatus::ONLY_2D;
+                                const bool should_refine =
+                                    GetInitializedRefineEveryN() > 0 &&
+                                    tr->GetNbObservations() % static_cast<size_t>(GetInitializedRefineEveryN()) == 0 &&
+                                    tr->GetStatus() == ObjectTrackStatus::INITIALIZED;
+                                if (should_initialize || should_refine) {
+                                    bool status_rec = tr->ReconstructFromCenter();
+                                    if (status_rec && pCurMap)
+                                        tr->OptimizeReconstruction(pCurMap);
                                 }
                             }
 
@@ -4712,6 +4776,48 @@ void Tracking::ChangeCalibration(const string &strSettingPath)
     {
         center_reprojection_threshold_px_ = center_reprojection_threshold_node.real();
     }
+    far_object_depth_threshold_m_ = 2.0f;
+    cv::FileNode far_object_depth_threshold_node =
+        fSettings["Detector.FarObjectDepthThresholdM"];
+    if(!far_object_depth_threshold_node.empty() && far_object_depth_threshold_node.isReal())
+    {
+        far_object_depth_threshold_m_ = far_object_depth_threshold_node.real();
+    }
+    far_center_reprojection_threshold_px_ = 140.0f;
+    cv::FileNode far_center_reprojection_threshold_node =
+        fSettings["Detector.FarCenterReprojectionThresholdPx"];
+    if(!far_center_reprojection_threshold_node.empty() && far_center_reprojection_threshold_node.isReal())
+    {
+        far_center_reprojection_threshold_px_ = far_center_reprojection_threshold_node.real();
+    }
+    float min_reconstruction_angle_deg = 5.0f;
+    cv::FileNode min_reconstruction_angle_node =
+        fSettings["Detector.MinReconstructionAngleDeg"];
+    if(!min_reconstruction_angle_node.empty() && min_reconstruction_angle_node.isReal())
+    {
+        min_reconstruction_angle_deg = min_reconstruction_angle_node.real();
+    }
+    if(min_reconstruction_angle_deg < 0.1f)
+        min_reconstruction_angle_deg = 0.1f;
+    min_reconstruction_angle_rad_ = 0.01745329251f * min_reconstruction_angle_deg;
+    min_init_observations_ = 6;
+    cv::FileNode min_init_observations_node =
+        fSettings["Detector.MinInitObservations"];
+    if(!min_init_observations_node.empty() && min_init_observations_node.isInt())
+    {
+        min_init_observations_ = min_init_observations_node.operator int();
+    }
+    if(min_init_observations_ < 2)
+        min_init_observations_ = 2;
+    initialized_refine_every_n_ = 2;
+    cv::FileNode initialized_refine_every_node =
+        fSettings["Detector.InitializedRefineEveryN"];
+    if(!initialized_refine_every_node.empty() && initialized_refine_every_node.isInt())
+    {
+        initialized_refine_every_n_ = initialized_refine_every_node.operator int();
+    }
+    if(initialized_refine_every_n_ < 0)
+        initialized_refine_every_n_ = 0;
     frame_report_interval_ = 10;
     cv::FileNode frame_report_interval_node = fSettings["Debug.FrameReportInterval"];
     if(!frame_report_interval_node.empty() && frame_report_interval_node.isInt())

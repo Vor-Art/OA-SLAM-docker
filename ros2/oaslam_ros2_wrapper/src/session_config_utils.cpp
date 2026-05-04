@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -14,6 +15,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <geometry_msgs/msg/point.hpp>
@@ -201,6 +203,96 @@ void EnsureFileExists(const std::string& path, const std::string& label) {
   }
 }
 
+std::string NormalizeCategoryToken(std::string token) {
+  std::transform(token.begin(), token.end(), token.begin(),
+                 [](unsigned char c) {
+                   if (c == '-' || c == '/') {
+                     return '_';
+                   }
+                   return static_cast<char>(std::tolower(c));
+                 });
+  return token;
+}
+
+const std::unordered_map<std::string, int>& CocoCategoryAliases() {
+  static const std::unordered_map<std::string, int> aliases{
+      {"person", 0},
+      {"people", 0},
+      {"human", 0},
+      {"humans", 0},
+      {"body", 0},
+      {"hand", 0},
+      {"hands", 0},
+      {"arm", 0},
+      {"arms", 0},
+      {"leg", 0},
+      {"legs", 0},
+      {"bicycle", 1},
+      {"bike", 1},
+      {"car", 2},
+      {"motorcycle", 3},
+      {"motorbike", 3},
+      {"airplane", 4},
+      {"aeroplane", 4},
+      {"bus", 5},
+      {"train", 6},
+      {"truck", 7},
+      {"boat", 8},
+      {"bird", 14},
+      {"cat", 15},
+      {"dog", 16},
+      {"horse", 17},
+      {"sheep", 18},
+      {"cow", 19},
+      {"elephant", 20},
+      {"bear", 21},
+      {"zebra", 22},
+      {"giraffe", 23},
+      {"sports_ball", 32},
+      {"ball", 32},
+  };
+  return aliases;
+}
+
+std::vector<int> DefaultDynamicCategoryIds() {
+  return {
+      0,  // person; COCO does not split hands/arms, so body-part aliases map here.
+      1, 2, 3, 4, 5, 6, 7, 8,  // vehicles
+      14, 15, 16, 17, 18, 19, 20, 21, 22, 23  // animals
+  };
+}
+
+int ParseCategoryToken(const std::string& raw_token,
+                       const std::string& path,
+                       int line_number) {
+  const std::string token = NormalizeCategoryToken(raw_token);
+  try {
+    size_t consumed = 0;
+    const int value = std::stoi(token, &consumed);
+    if (consumed == token.size()) {
+      return value;
+    }
+  } catch (const std::exception&) {
+  }
+
+  const auto& aliases = CocoCategoryAliases();
+  const auto iter = aliases.find(token);
+  if (iter != aliases.end()) {
+    return iter->second;
+  }
+
+  std::ostringstream stream;
+  stream << "Unknown ignored category token '" << raw_token << "' in " << path
+         << ":" << line_number
+         << ". Use a COCO class id or a supported alias such as person, hand, car, dog.";
+  throw std::runtime_error(stream.str());
+}
+
+void SortUnique(std::vector<int>& values) {
+  std::sort(values.begin(), values.end());
+  values.erase(std::unique(values.begin(), values.end()), values.end());
+}
+
 std::vector<int> LoadIgnoredCategoriesFile(const std::string& path) {
   if (IsEmptyPath(path)) {
     return {};
@@ -211,18 +303,61 @@ std::vector<int> LoadIgnoredCategoriesFile(const std::string& path) {
   std::ifstream input(path);
   std::vector<int> categories;
   std::string line;
+  int line_number = 0;
   while (std::getline(input, line)) {
-    if (line.empty() || line.front() == '#') {
-      continue;
+    ++line_number;
+    const size_t comment_pos = line.find('#');
+    if (comment_pos != std::string::npos) {
+      line.erase(comment_pos);
     }
+    std::replace(line.begin(), line.end(), ',', ' ');
+    std::replace(line.begin(), line.end(), ';', ' ');
 
     std::istringstream stream(line);
-    int category = 0;
-    if (stream >> category) {
-      categories.push_back(category);
+    std::string token;
+    while (stream >> token) {
+      categories.push_back(ParseCategoryToken(token, path, line_number));
     }
   }
+
+  SortUnique(categories);
   return categories;
+}
+
+std::vector<int> BuildIgnoredCategories(bool ignore_dynamic_categories,
+                                        const std::string& ignored_categories_file) {
+  std::vector<int> categories;
+  if (ignore_dynamic_categories) {
+    categories = DefaultDynamicCategoryIds();
+  }
+
+  std::vector<int> configured_categories =
+      LoadIgnoredCategoriesFile(ignored_categories_file);
+  categories.insert(categories.end(), configured_categories.begin(),
+                    configured_categories.end());
+  SortUnique(categories);
+  return categories;
+}
+
+std::string FormatIgnoredCategorySummary(bool ignore_dynamic_categories,
+                                         const std::string& ignored_categories_file) {
+  std::ostringstream stream;
+  stream << (ignore_dynamic_categories ? "dynamic defaults" : "custom only");
+  const std::vector<int> categories =
+      BuildIgnoredCategories(ignore_dynamic_categories, ignored_categories_file);
+  stream << " | ids=";
+  if (categories.empty()) {
+    stream << "<none>";
+    return stream.str();
+  }
+
+  for (size_t i = 0; i < categories.size(); ++i) {
+    if (i != 0) {
+      stream << ",";
+    }
+    stream << categories[i];
+  }
+  return stream.str();
 }
 
 template <size_t N>
@@ -450,6 +585,8 @@ CommonSessionParams DeclareCommonSessionParameters(rclcpp::Node& node) {
       node.declare_parameter<std::string>("detection_file_path", "");
   params.ignored_categories_file =
       node.declare_parameter<std::string>("ignored_categories_file", "");
+  params.ignore_dynamic_categories =
+      node.declare_parameter<bool>("ignore_dynamic_categories", true);
   params.relocalization_mode =
       node.declare_parameter<std::string>("relocalization_mode", "points");
   params.use_viewer = node.declare_parameter<bool>("use_viewer", false);
@@ -495,7 +632,8 @@ oaslam::SessionConfig BuildSessionConfig(const CommonSessionParams& params) {
 
   config.observation_source.kind = ParseObservationMode(params.observation_mode);
   config.observation_source.ignored_categories =
-      LoadIgnoredCategoriesFile(params.ignored_categories_file);
+      BuildIgnoredCategories(params.ignore_dynamic_categories,
+                             params.ignored_categories_file);
 
   const oaslam::ModelInputSize model_input_size =
       oaslam::LoadModelInputSize(params.camera_settings_file);
@@ -608,7 +746,12 @@ void LogNodeStartup(const rclcpp::Logger& logger,
          << " | " << console::KeyValue("imu", console::OnOff(session_params.use_imu))
          << " | " << console::KeyValue("viewer", console::OnOff(session_params.use_viewer))
          << " | " << console::KeyValue("obs", session_params.observation_mode)
-         << " | " << console::KeyValue("relocal", session_params.relocalization_mode);
+         << " | " << console::KeyValue("relocal", session_params.relocalization_mode)
+         << " | " << console::KeyValue(
+                       "ignored",
+                       FormatIgnoredCategorySummary(
+                           session_params.ignore_dynamic_categories,
+                           session_params.ignored_categories_file));
   if (!entries.empty()) {
     stream << "\n  ";
   }

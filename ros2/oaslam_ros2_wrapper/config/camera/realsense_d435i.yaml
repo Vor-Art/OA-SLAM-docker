@@ -38,7 +38,17 @@ Model.height: 480
 
 # # Save per-frame detections in OA-SLAM JSON format (0/1 or false/true).
 # save_detections: 1
-Detector.CenterReprojectionThresholdPx: 50.0
+Detector.CenterReprojectionThresholdPx: 80.0
+# Distant objects have weaker triangulation parallax. Keep the normal gate
+# conservative, but allow a larger center reprojection residual once the
+# reconstructed object center is beyond this depth.
+Detector.FarObjectDepthThresholdM: 2.0
+Detector.FarCenterReprojectionThresholdPx: 140.0
+# Object landmarks no longer need the legacy hard-coded 10 degree baseline or
+# 11 observations before the first center reconstruction attempt.
+Detector.MinReconstructionAngleDeg: 5.0
+Detector.MinInitObservations: 6
+Detector.InitializedRefineEveryN: 2
 
 #--------------------------------------------------------------------------------------------
 # Debug Parameters

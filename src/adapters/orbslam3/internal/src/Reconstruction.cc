@@ -124,7 +124,9 @@ std::pair<bool, Ellipsoid>
 ReconstructEllipsoidFromCenters(const std::vector<BBox2, Eigen::aligned_allocator<BBox2>>& bboxes,
                                 const std::vector<Matrix34d, Eigen::aligned_allocator<Matrix34d>>& Rts, 
                                 const Eigen::Matrix3d& K,
-                                double center_reprojection_threshold_px)
+                                double center_reprojection_threshold_px,
+                                double far_object_depth_threshold_m,
+                                double far_center_reprojection_threshold_px)
 {
     size_t n = bboxes.size();
 
@@ -154,7 +156,14 @@ ReconstructEllipsoidFromCenters(const std::vector<BBox2, Eigen::aligned_allocato
         double v = X_img[1] / X_img[2];
         
         
-        if ((points2d[i] - Eigen::Vector2d(u, v)).norm() > center_reprojection_threshold_px) {
+        double allowed_reprojection_threshold_px = center_reprojection_threshold_px;
+        if (far_object_depth_threshold_m > 0.0 &&
+            far_center_reprojection_threshold_px > allowed_reprojection_threshold_px &&
+            X_cam.z() >= far_object_depth_threshold_m) {
+            allowed_reprojection_threshold_px = far_center_reprojection_threshold_px;
+        }
+
+        if ((points2d[i] - Eigen::Vector2d(u, v)).norm() > allowed_reprojection_threshold_px) {
             std::cerr << "Reconstruction failed: reconstructed center is too far from a detection" << std::endl;
             return {false, Ellipsoid()};
         }

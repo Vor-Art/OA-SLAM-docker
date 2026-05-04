@@ -124,6 +124,21 @@ public:
     float GetCenterReprojectionThresholdPx() const {
         return center_reprojection_threshold_px_;
     }
+    float GetFarObjectDepthThresholdM() const {
+        return far_object_depth_threshold_m_;
+    }
+    float GetFarCenterReprojectionThresholdPx() const {
+        return far_center_reprojection_threshold_px_;
+    }
+    float GetMinReconstructionAngleRad() const {
+        return min_reconstruction_angle_rad_;
+    }
+    int GetMinInitObservations() const {
+        return min_init_observations_;
+    }
+    int GetInitializedRefineEveryN() const {
+        return initialized_refine_every_n_;
+    }
     int GetFrameReportInterval() const {
         return frame_report_interval_;
     }
@@ -363,6 +378,11 @@ protected:
     // and inserted from just one frame. Far points requiere a match in two keyframes.
     float mThDepth;
     float center_reprojection_threshold_px_ = 100.0f;
+    float far_object_depth_threshold_m_ = 2.0f;
+    float far_center_reprojection_threshold_px_ = 140.0f;
+    float min_reconstruction_angle_rad_ = 0.0872665f;
+    int min_init_observations_ = 6;
+    int initialized_refine_every_n_ = 2;
     int frame_report_interval_ = 10;
 
     // For RGB-D inputs only. For some datasets (e.g. TUM) the depthmap values are scaled.

@@ -105,11 +105,20 @@ Important parameters:
 - `observation_mode` - `onnx`, `file`, or `none`.
 - `detection_model_path` - required when `observation_mode: "onnx"`.
 - `detection_file_path` - required when `observation_mode: "file"`.
-- `ignored_categories_file` - optional category ignore list.
+- `ignore_dynamic_categories` - filters built-in COCO dynamic classes
+  (person/body-part aliases, vehicles, and animals) before object tracking.
+- `ignored_categories_file` - optional extra category ignore list; accepts COCO
+  IDs and supported aliases such as `person`, `hand`, `car`, `dog`.
 - `relocalization_mode` - `points`, `objects`, or `points_and_objects`.
 - `use_viewer` - enables Pangolin viewer windows.
 - `use_imu` - enables IMU use in the SLAM backend.
 - `output_folder` - base folder for timestamped TUM trajectory outputs.
+
+Object initialization gates are configured in the camera settings YAML:
+`Detector.MinInitObservations`, `Detector.MinReconstructionAngleDeg`,
+`Detector.CenterReprojectionThresholdPx`,
+`Detector.FarObjectDepthThresholdM`, and
+`Detector.FarCenterReprojectionThresholdPx`.
 
 ## License
 

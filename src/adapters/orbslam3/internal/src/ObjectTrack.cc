@@ -143,7 +143,7 @@ bool ObjectTrack::ReconstructFromLandmarks(Map* map)
 
 bool ObjectTrack::ReconstructCrocco(bool use_two_passes)
 {
-    if (this->GetAngularDifference() < TO_RAD(10.0)) {
+    if (this->GetAngularDifference() < tracker_->GetMinReconstructionAngleRad()) {
         return false;
     }
 
@@ -169,7 +169,7 @@ bool ObjectTrack::ReconstructCrocco(bool use_two_passes)
 
 bool ObjectTrack::ReconstructFromCenter(bool use_keyframes)
 {
-    if (this->GetAngularDifference() < TO_RAD(10.0)) {
+    if (this->GetAngularDifference() < tracker_->GetMinReconstructionAngleRad()) {
         return false;
     }
 
@@ -186,7 +186,9 @@ bool ObjectTrack::ReconstructFromCenter(bool use_keyframes)
     }
     auto [status, ellipsoid] = ReconstructEllipsoidFromCenters(
         bboxes, Rts, tracker_->GetK(),
-        tracker_->GetCenterReprojectionThresholdPx());
+        tracker_->GetCenterReprojectionThresholdPx(),
+        tracker_->GetFarObjectDepthThresholdM(),
+        tracker_->GetFarCenterReprojectionThresholdPx());
 
     if (!status)
         return false;

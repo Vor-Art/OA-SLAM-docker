@@ -448,6 +448,41 @@ namespace ORB_SLAM3 {
         if(!found) {
             centerReprojectionThresholdPx_ = 100.0f;
         }
+        farObjectDepthThresholdM_ = readParameter<float>(
+            fSettings, "Detector.FarObjectDepthThresholdM", found, false);
+        if(!found) {
+            farObjectDepthThresholdM_ = 2.0f;
+        }
+        farCenterReprojectionThresholdPx_ = readParameter<float>(
+            fSettings, "Detector.FarCenterReprojectionThresholdPx", found, false);
+        if(!found) {
+            farCenterReprojectionThresholdPx_ = 140.0f;
+        }
+        float minReconstructionAngleDeg = readParameter<float>(
+            fSettings, "Detector.MinReconstructionAngleDeg", found, false);
+        if(!found) {
+            minReconstructionAngleDeg = 5.0f;
+        }
+        if(minReconstructionAngleDeg < 0.1f) {
+            minReconstructionAngleDeg = 0.1f;
+        }
+        minReconstructionAngleRad_ = 0.01745329251f * minReconstructionAngleDeg;
+        minInitObservations_ = readParameter<int>(
+            fSettings, "Detector.MinInitObservations", found, false);
+        if(!found) {
+            minInitObservations_ = 6;
+        }
+        if(minInitObservations_ < 2) {
+            minInitObservations_ = 2;
+        }
+        initializedRefineEveryN_ = readParameter<int>(
+            fSettings, "Detector.InitializedRefineEveryN", found, false);
+        if(!found) {
+            initializedRefineEveryN_ = 2;
+        }
+        if(initializedRefineEveryN_ < 0) {
+            initializedRefineEveryN_ = 0;
+        }
         frameReportInterval_ = readParameter<int>(
             fSettings, "Debug.FrameReportInterval", found, false);
         if(!found) {

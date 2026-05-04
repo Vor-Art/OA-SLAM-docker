@@ -1,0 +1,10 @@
+# Optional extension file for ignored detector classes.
+# The wrapper accepts COCO class IDs or aliases. Lines can contain comma- or
+# space-separated values; inline comments are allowed.
+#
+# Built-in dynamic filtering already ignores:
+# person/hands/arms, vehicles, and animals.
+#
+# Add extra classes here only when they are not useful map landmarks for your
+# experiment, for example:
+# sports_ball

@@ -24,6 +24,10 @@ scout_slam_node:
     observation_mode: "onnx"  # "onnx", "file", or "none"
     detection_model_path: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
     detection_file_path: ""
+    # Filters COCO classes that are usually dynamic in SLAM maps: person,
+    # vehicles, and animals. COCO does not expose hands/arms separately, so
+    # those aliases are treated as person when used in an ignored category file.
+    ignore_dynamic_categories: true
     ignored_categories_file: ""
 
     # Relocalization

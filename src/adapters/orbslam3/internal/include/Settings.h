@@ -95,6 +95,11 @@ namespace ORB_SLAM3 {
 
         float depthMapFactor() {return depthMapFactor_;}
         float centerReprojectionThresholdPx() {return centerReprojectionThresholdPx_;}
+        float farObjectDepthThresholdM() {return farObjectDepthThresholdM_;}
+        float farCenterReprojectionThresholdPx() {return farCenterReprojectionThresholdPx_;}
+        float minReconstructionAngleRad() {return minReconstructionAngleRad_;}
+        int minInitObservations() {return minInitObservations_;}
+        int initializedRefineEveryN() {return initializedRefineEveryN_;}
         int frameReportInterval() {return frameReportInterval_;}
 
         int nFeatures() {return nFeatures_;}
@@ -219,6 +224,11 @@ namespace ORB_SLAM3 {
          */
         float depthMapFactor_;
         float centerReprojectionThresholdPx_ = 100.0f;
+        float farObjectDepthThresholdM_ = 2.0f;
+        float farCenterReprojectionThresholdPx_ = 140.0f;
+        float minReconstructionAngleRad_ = 0.0872665f;
+        int minInitObservations_ = 6;
+        int initializedRefineEveryN_ = 2;
         int frameReportInterval_ = 10;
 
         /*

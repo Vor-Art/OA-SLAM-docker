@@ -84,6 +84,7 @@ struct CommonSessionParams {
   std::string detection_model_path;
   std::string detection_file_path;
   std::string ignored_categories_file;
+  bool ignore_dynamic_categories = true;
   std::string relocalization_mode;
   bool use_viewer = false;
   bool use_imu = true;

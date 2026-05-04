@@ -142,8 +142,7 @@ void PrintOfflineProgress(uint64_t total_rgb_in_bag,
                    : oaslam_ros2_wrapper::console::Blue("running");
 
   std::printf(
-      "%s %s | %s | %s | %s | %s | %s | %s | %s | %s\n"
-      "  %s | %s | %s | %s | %s | %s\n",
+      "%s %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s\n",
       oaslam_ros2_wrapper::console::Prefix(label).c_str(),
       status.c_str(),
       oaslam_ros2_wrapper::console::KeyValue(
