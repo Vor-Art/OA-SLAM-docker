@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "console_style.h"
 #include "depth_alignment.h"
 #include "oaslam/core/frame_packet.h"
 #include "session_config_utils.h"
@@ -109,6 +110,70 @@ std::string TopicSummary(const std::map<std::string, std::string>& topic_type_ma
   return "ok:" + topic_name + " [" + it->second + "]";
 }
 
+std::string ShortDouble(double value, const std::string& suffix = "") {
+  std::ostringstream stream;
+  stream.setf(std::ios::fixed);
+  stream.precision(1);
+  stream << value << suffix;
+  return stream.str();
+}
+
+void PrintOfflineProgress(uint64_t total_rgb_in_bag,
+                          uint64_t total_depth_in_bag,
+                          uint64_t total_imu_in_bag,
+                          uint64_t imu_nan_filtered,
+                          uint64_t total_frames_processed,
+                          uint64_t total_poses_obtained,
+                          uint64_t total_poses_waiting_imu,
+                          uint64_t total_poses_interpolated,
+                          uint64_t total_frames_skipped_no_depth,
+                          uint64_t total_messages_skipped_start_offset,
+                          uint64_t total_imu_preroll,
+                          uint64_t total_trajectory_lines_written,
+                          double total_sec,
+                          bool final_report) {
+  const double fps =
+      total_frames_processed > 0 && total_sec > 0.0
+          ? static_cast<double>(total_frames_processed) / total_sec
+          : 0.0;
+  const std::string label = final_report ? "offline done" : "offline progress";
+  const std::string status =
+      final_report ? oaslam_ros2_wrapper::console::StatusOk("complete")
+                   : oaslam_ros2_wrapper::console::Blue("running");
+
+  std::printf(
+      "%s %s | %s | %s | %s | %s | %s | %s | %s | %s\n"
+      "  %s | %s | %s | %s | %s | %s\n",
+      oaslam_ros2_wrapper::console::Prefix(label).c_str(),
+      status.c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "processed", std::to_string(total_frames_processed)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "tracked", std::to_string(total_poses_obtained)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "fallback", std::to_string(total_poses_interpolated)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "wait_imu", std::to_string(total_poses_waiting_imu)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "skip_depth", std::to_string(total_frames_skipped_no_depth)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "traj", std::to_string(total_trajectory_lines_written)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue("fps", ShortDouble(fps)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue("time", ShortDouble(total_sec, "s")).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "rgb", std::to_string(total_rgb_in_bag)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "depth", std::to_string(total_depth_in_bag)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "imu", std::to_string(total_imu_in_bag)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "imu_nan", std::to_string(imu_nan_filtered)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "skip_start", std::to_string(total_messages_skipped_start_offset)).c_str(),
+      oaslam_ros2_wrapper::console::KeyValue(
+          "imu_preroll", std::to_string(total_imu_preroll)).c_str());
+}
+
 }  // namespace
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -190,7 +255,10 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
 
   /// Run the full offline pipeline: open bag -> stream -> process -> save.
   void Run() {
-    RCLCPP_INFO(get_logger(), "Bag input | path=%s", topics_.bag_path.c_str());
+    const std::string bag_input =
+        oaslam_ros2_wrapper::console::Prefix("bag input") + " " +
+        oaslam_ros2_wrapper::console::KeyValue("path", topics_.bag_path);
+    RCLCPP_INFO(get_logger(), "%s", bag_input.c_str());
 
     // ── Open the bag ──
     rosbag2_cpp::Reader reader;
@@ -210,12 +278,17 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
       topic_type_map[info.name] = info.type;
     }
 
-    RCLCPP_INFO(get_logger(),
-                "Bag scan | topics=%zu | rgb=%s | depth=%s | imu=%s",
-                topics_and_types.size(),
-                TopicSummary(topic_type_map, topics_.shared.rgb_topic).c_str(),
-                TopicSummary(topic_type_map, topics_.shared.depth_topic).c_str(),
-                TopicSummary(topic_type_map, topics_.shared.imu_topic).c_str());
+    const std::string bag_scan =
+        oaslam_ros2_wrapper::console::Prefix("bag scan") + " " +
+        oaslam_ros2_wrapper::console::KeyValue(
+            "topics", std::to_string(topics_and_types.size())) +
+        " | " + oaslam_ros2_wrapper::console::KeyValue(
+                    "rgb", TopicSummary(topic_type_map, topics_.shared.rgb_topic)) +
+        " | " + oaslam_ros2_wrapper::console::KeyValue(
+                    "depth", TopicSummary(topic_type_map, topics_.shared.depth_topic)) +
+        " | " + oaslam_ros2_wrapper::console::KeyValue(
+                    "imu", TopicSummary(topic_type_map, topics_.shared.imu_topic));
+    RCLCPP_INFO(get_logger(), "%s", bag_scan.c_str());
 
     // Verify required topics exist
     if (topic_type_map.find(topics_.shared.rgb_topic) == topic_type_map.end()) {
@@ -266,9 +339,14 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
             ? std::to_string(topics_.finish_time_sec)
             : std::string("disabled");
 
-    RCLCPP_INFO(get_logger(),
-                "Bag playback started | start_offset_sec=%.3f | finish_time_sec=%s",
-                topics_.start_offset_sec, finish_time_label.c_str());
+    const std::string playback_started =
+        oaslam_ros2_wrapper::console::Prefix("bag playback") + " " +
+        oaslam_ros2_wrapper::console::StatusOk("started") + " | " +
+        oaslam_ros2_wrapper::console::KeyValue(
+            "start_offset_sec", std::to_string(topics_.start_offset_sec)) +
+        " | " + oaslam_ros2_wrapper::console::KeyValue(
+                    "finish_time_sec", finish_time_label);
+    RCLCPP_INFO(get_logger(), "%s", playback_started.c_str());
 
     // ── Single-pass streaming loop ──
     // The rosbag2 sequential reader delivers messages in storage order
@@ -582,33 +660,14 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
         if (total_frames_processed % 100 == 0) {
           auto now = std::chrono::steady_clock::now();
           double total_sec = std::chrono::duration<double>(now - wall_start).count();
-          double fps = total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0;
-          std::printf("Progress | frames=%lu tracked=%lu wait_imu=%lu fallback=%lu skip_no_depth=%lu fps=%.1f\n",
-                      static_cast<unsigned long>(total_frames_processed),
-                      static_cast<unsigned long>(total_poses_obtained),
-                      static_cast<unsigned long>(total_poses_waiting_imu),
-                      static_cast<unsigned long>(total_poses_interpolated),
-                      static_cast<unsigned long>(total_frames_skipped_no_depth),
-                      fps);
-          std::printf(
-            "Offline VIO TMP PROGRESS | rgb=%lu depth=%lu imu=%lu imu_nan=%lu "
-            "processed=%lu tracked=%lu wait_imu=%lu fallback=%lu skip_no_depth=%lu "
-            "skip_start_offset=%lu imu_preroll=%lu traj_lines=%lu "
-            "total_time=%.1fs fps=%.1f\n",
-            static_cast<unsigned long>(total_rgb_in_bag),
-            static_cast<unsigned long>(total_depth_in_bag),
-            static_cast<unsigned long>(total_imu_in_bag),
-            static_cast<unsigned long>(imu_nan_filtered),
-            static_cast<unsigned long>(total_frames_processed),
-            static_cast<unsigned long>(total_poses_obtained),
-            static_cast<unsigned long>(total_poses_waiting_imu),
-            static_cast<unsigned long>(total_poses_interpolated),
-            static_cast<unsigned long>(total_frames_skipped_no_depth),
-            static_cast<unsigned long>(total_messages_skipped_start_offset),
-            static_cast<unsigned long>(total_imu_preroll),
-            static_cast<unsigned long>(total_trajectory_lines_written),
-            total_sec, fps
-        );
+          PrintOfflineProgress(total_rgb_in_bag, total_depth_in_bag,
+                               total_imu_in_bag, imu_nan_filtered,
+                               total_frames_processed, total_poses_obtained,
+                               total_poses_waiting_imu, total_poses_interpolated,
+                               total_frames_skipped_no_depth,
+                               total_messages_skipped_start_offset,
+                               total_imu_preroll,
+                               total_trajectory_lines_written, total_sec, false);
         }
 
         // Check if SLAM requested quit
@@ -647,26 +706,14 @@ class OaSlamOfflineVioNode : public rclcpp::Node {
                   topics_.finish_time_sec);
     }
 
-    std::printf(
-        "Offline VIO done | rgb=%lu depth=%lu imu=%lu imu_nan=%lu "
-        "processed=%lu tracked=%lu wait_imu=%lu fallback=%lu skip_no_depth=%lu "
-        "skip_start_offset=%lu imu_preroll=%lu traj_lines=%lu "
-        "total_time=%.1fs fps=%.1f\n",
-        static_cast<unsigned long>(total_rgb_in_bag),
-        static_cast<unsigned long>(total_depth_in_bag),
-        static_cast<unsigned long>(total_imu_in_bag),
-        static_cast<unsigned long>(imu_nan_filtered),
-        static_cast<unsigned long>(total_frames_processed),
-        static_cast<unsigned long>(total_poses_obtained),
-        static_cast<unsigned long>(total_poses_waiting_imu),
-        static_cast<unsigned long>(total_poses_interpolated),
-        static_cast<unsigned long>(total_frames_skipped_no_depth),
-        static_cast<unsigned long>(total_messages_skipped_start_offset),
-        static_cast<unsigned long>(total_imu_preroll),
-        static_cast<unsigned long>(total_trajectory_lines_written),
-        total_sec,
-        total_frames_processed > 0 ? total_frames_processed / total_sec : 0.0
-    );
+    PrintOfflineProgress(total_rgb_in_bag, total_depth_in_bag,
+                         total_imu_in_bag, imu_nan_filtered,
+                         total_frames_processed, total_poses_obtained,
+                         total_poses_waiting_imu, total_poses_interpolated,
+                         total_frames_skipped_no_depth,
+                         total_messages_skipped_start_offset,
+                         total_imu_preroll,
+                         total_trajectory_lines_written, total_sec, true);
     oaslam_ros2_wrapper::ShutdownNodeRuntime(runtime_, get_logger());
   }
 

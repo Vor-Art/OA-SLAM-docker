@@ -11,6 +11,42 @@ TEMP_PARAMS_HOST=""
 
 cd "${ROOT_DIR}"
 
+color_enabled() {
+  if [[ "${SCOUTSLAM_COLOR:-}" =~ ^(0|false|never|off)$ ]]; then
+    return 1
+  fi
+  if [[ "${SCOUTSLAM_COLOR:-}" =~ ^(1|true|always|on)$ ]]; then
+    return 0
+  fi
+  [[ -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]
+}
+
+paint() {
+  local code="$1"
+  local text="$2"
+  if color_enabled; then
+    printf '\033[%sm%s\033[0m' "${code}" "${text}"
+  else
+    printf '%s' "${text}"
+  fi
+}
+
+section() {
+  printf '\n%s %s\n' "$(paint '1;36' '[ScoutSLAM]')" "$(paint '1;37' "$1")"
+}
+
+ok() {
+  printf '%s %s\n' "$(paint '1;32' 'OK')" "$1"
+}
+
+warn() {
+  printf '%s %s\n' "$(paint '1;33' 'WARN')" "$1"
+}
+
+fail() {
+  printf '%s %s\n' "$(paint '1;31' 'FAIL')" "$1" >&2
+}
+
 cleanup() {
   if [[ -n "${TEMP_PARAMS_HOST}" ]]; then
     rm -f "${TEMP_PARAMS_HOST}"
@@ -21,7 +57,7 @@ trap cleanup EXIT
 require_command() {
   local command_name="$1"
   if ! command -v "${command_name}" >/dev/null 2>&1; then
-    printf 'Missing required command: %s\n' "${command_name}" >&2
+    fail "missing required command: ${command_name}"
     exit 1
   fi
 }
@@ -36,13 +72,13 @@ mapped_local_path() {
 require_command docker
 
 if [[ ! -x docker/run.sh ]]; then
-  printf 'Missing executable Docker wrapper: docker/run.sh\n' >&2
+  fail "missing executable Docker wrapper: docker/run.sh"
   exit 1
 fi
 
 local_params="$(mapped_local_path "${PARAMS_FILE}")"
 if [[ -n "${local_params}" && ! -f "${local_params}" ]]; then
-  printf 'Configured params file is not present in the checkout: %s\n' "${local_params}" >&2
+  fail "configured params file is not present in the checkout: ${local_params}"
   exit 1
 fi
 
@@ -55,34 +91,36 @@ if [[ "${HEADLESS}" == "1" && -n "${local_params}" ]]; then
   RUN_PARAMS_FILE="/opt/OA-SLAM/${TEMP_PARAMS_HOST#"${ROOT_DIR}/"}"
 fi
 
-printf '== ScoutSLAM container status ==\n'
+section "container status"
 ./docker/run.sh status
 
-printf '\n== Build C++ artifacts ==\n'
+section "build C++ artifacts"
 ./docker/run.sh rebuild-cpp
+ok "C++ artifacts built"
 
-printf '\n== Build ROS 2 artifacts ==\n'
+section "build ROS 2 artifacts"
 ./docker/run.sh rebuild-ros2
+ok "ROS 2 artifacts built"
 
 if [[ "${SKIP_OFFLINE_RUN}" == "1" ]]; then
-  printf '\nSKIP: offline run disabled by SCOUTSLAM_SKIP_OFFLINE_RUN=1\n'
+  warn "offline run disabled by SCOUTSLAM_SKIP_OFFLINE_RUN=1"
   exit 0
 fi
 
-printf '\n== Offline run ==\n'
-printf 'Params: %s\n' "${RUN_PARAMS_FILE}"
+section "offline run"
+printf '%s %s\n' "$(paint '36' 'params=')" "${RUN_PARAMS_FILE}"
 if [[ "${RUN_PARAMS_FILE}" != "${PARAMS_FILE}" ]]; then
-  printf 'Headless params copy generated from: %s\n' "${PARAMS_FILE}"
+  printf '%s %s\n' "$(paint '36' 'headless_source=')" "${PARAMS_FILE}"
 fi
 RUN_LOG="$(mktemp -t scoutslam_offline.XXXXXX.log)"
 if ! ./docker/run.sh run-offline "${RUN_PARAMS_FILE}" 2>&1 | tee "${RUN_LOG}"; then
-  printf 'Offline run command failed. Log: %s\n' "${RUN_LOG}" >&2
+  fail "offline run command failed. log=${RUN_LOG}"
   exit 1
 fi
 
 if grep -E "\\[FATAL\\]|process has died|Offline VIO failed|Traceback|Exception" "${RUN_LOG}" >/dev/null; then
-  printf 'Offline run reported a fatal node failure. Log: %s\n' "${RUN_LOG}" >&2
+  fail "offline run reported a fatal node failure. log=${RUN_LOG}"
   exit 1
 fi
 
-printf '\nScoutSLAM check passed.\n'
+ok "ScoutSLAM check passed"

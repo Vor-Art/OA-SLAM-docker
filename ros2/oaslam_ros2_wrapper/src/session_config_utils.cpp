@@ -19,6 +19,8 @@
 #include <geometry_msgs/msg/point.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 
+#include "console_style.h"
+
 namespace oaslam_ros2_wrapper {
 namespace {
 
@@ -43,10 +45,6 @@ constexpr std::array<std::array<float, 3>, 10> kSemanticPalette{{
     {{0.74F, 0.74F, 0.13F}},  // olive
     {{0.09F, 0.75F, 0.81F}},  // cyan
 }};
-
-const char* BoolFlag(bool value) {
-  return value ? "on" : "off";
-}
 
 std_msgs::msg::ColorRGBA MakeColor(float r, float g, float b, float a) {
   std_msgs::msg::ColorRGBA color;
@@ -466,8 +464,10 @@ NodeRuntime CreateNodeRuntime(rclcpp::Node& node) {
   const std::string tum_path = OpenTumTrajectoryFile(
       runtime.tum_trajectory_file, runtime.session_params.output_folder);
   if (!tum_path.empty()) {
-    RCLCPP_INFO(node.get_logger(), "Realtime trajectory output | tum=%s",
-                tum_path.c_str());
+    const std::string message =
+        console::Prefix("trajectory") + " " + console::StatusOk("writing") +
+        " | " + console::KeyValue("tum", tum_path);
+    RCLCPP_INFO(node.get_logger(), "%s", message.c_str());
   }
 
   const oaslam::SessionConfig session_config =
@@ -545,7 +545,9 @@ void ShutdownNodeRuntime(NodeRuntime& runtime, const rclcpp::Logger& logger) {
   if (runtime.tum_trajectory_file.is_open()) {
     runtime.tum_trajectory_file.flush();
     runtime.tum_trajectory_file.close();
-    RCLCPP_INFO(logger, "Trajectory output closed");
+    const std::string message =
+        console::Prefix("trajectory") + " " + console::StatusOk("closed");
+    RCLCPP_INFO(logger, "%s", message.c_str());
   }
 
   if (runtime.session) {
@@ -558,10 +560,12 @@ void ShutdownNodeRuntime(NodeRuntime& runtime, const rclcpp::Logger& logger) {
       try {
         if (runtime.session->saveFinalTrajectory(final_trajectory_path.string(),
                                                  final_keyframe_path.string())) {
-          RCLCPP_INFO(logger,
-                      "Final optimized trajectories saved | tum=%s keyframes=%s",
-                      final_trajectory_path.string().c_str(),
-                      final_keyframe_path.string().c_str());
+          const std::string message =
+              console::Prefix("trajectory") + " " +
+              console::StatusOk("optimized saved") + " | " +
+              console::KeyValue("tum", final_trajectory_path.string()) + " | " +
+              console::KeyValue("keyframes", final_keyframe_path.string());
+          RCLCPP_INFO(logger, "%s", message.c_str());
         }
       } catch (const std::exception& exc) {
         RCLCPP_WARN(logger,
@@ -581,7 +585,9 @@ void ShutdownNodeRuntime(NodeRuntime& runtime, const rclcpp::Logger& logger) {
       RCLCPP_WARN(logger, "SLAM session shutdown raised | err=unknown");
     }
     runtime.session.reset();
-    RCLCPP_INFO(logger, "SLAM session shut down");
+    const std::string message =
+        console::Prefix("session") + " " + console::StatusOk("shut down");
+    RCLCPP_INFO(logger, "%s", message.c_str());
   }
 }
 
@@ -597,11 +603,12 @@ void LogNodeStartup(const rclcpp::Logger& logger,
                     const CommonSessionParams& session_params,
                     const std::vector<std::pair<std::string, std::string>>& entries) {
   std::ostringstream stream;
-  stream << "OA-SLAM " << node_label
-         << " ready | imu=" << BoolFlag(session_params.use_imu)
-         << " viewer=" << BoolFlag(session_params.use_viewer)
-         << " obs=" << session_params.observation_mode
-         << " relocal=" << session_params.relocalization_mode;
+  stream << console::Prefix("OA-SLAM " + node_label) << " "
+         << console::StatusOk("ready")
+         << " | " << console::KeyValue("imu", console::OnOff(session_params.use_imu))
+         << " | " << console::KeyValue("viewer", console::OnOff(session_params.use_viewer))
+         << " | " << console::KeyValue("obs", session_params.observation_mode)
+         << " | " << console::KeyValue("relocal", session_params.relocalization_mode);
   if (!entries.empty()) {
     stream << "\n  ";
   }
@@ -609,7 +616,7 @@ void LogNodeStartup(const rclcpp::Logger& logger,
     if (i > 0) {
       stream << " | ";
     }
-    stream << entries[i].first << "=" << entries[i].second;
+    stream << console::KeyValue(entries[i].first, entries[i].second);
   }
   RCLCPP_INFO(logger, "%s", stream.str().c_str());
 }
