@@ -7,6 +7,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 COMPOSE_FILE="docker/docker-compose.yml"
 ENV_FILE="docker/.env"
 SERVICE="oa-slam"
+ROS2_CONFIG_DIR="/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config"
 
 prepare_proxy_env() {
   local http_proxy_value="${HTTP_PROXY:-${http_proxy:-}}"
@@ -136,13 +137,28 @@ run_ros2() {
   docker exec "${exec_args[@]}" "$SERVICE" /bin/bash /opt/OA-SLAM/docker/entrypoint_ros2.sh
 }
 
+resolve_ros2_params_file() {
+  local params_file="${1:-}"
+  local default_params_file="$2"
+
+  if [[ -z "$params_file" ]]; then
+    echo "$default_params_file"
+  elif [[ "$params_file" == /* || "$params_file" == *"/"* ]]; then
+    echo "$params_file"
+  else
+    echo "${ROS2_CONFIG_DIR}/${params_file}"
+  fi
+}
+
 run_ros2_online() {
-  local params_file="${1:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/online_vio.yaml}"
+  local params_file
+  params_file="$(resolve_ros2_params_file "${1:-}" "${ROS2_CONFIG_DIR}/online_vio.yaml")"
   run_ros2 "oaslam_vio.launch.py" "$params_file"
 }
 
 run_ros2_offline() {
-  local params_file="${1:-/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/offline_vio.yaml}"
+  local params_file
+  params_file="$(resolve_ros2_params_file "${1:-}" "${ROS2_CONFIG_DIR}/offline_vio.yaml")"
   run_ros2 "oaslam_offline_vio.launch.py" "$params_file"
 }
 
@@ -227,7 +243,10 @@ case "${1:-help}" in
     echo "  $0 build"
     echo "  $0 start"
     echo "  $0 rebuild"
-    echo "  $0 run-online [params]  # default /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/online_vio.yaml"
-    echo "  $0 run-offline [params]  # default /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/offline_vio.yaml"
+    echo "  $0 run-online [params]  # default ${ROS2_CONFIG_DIR}/online_vio.yaml"
+    echo "  $0 run-offline [params]  # default ${ROS2_CONFIG_DIR}/offline_vio.yaml"
+    echo ""
+    echo "Params can be a full container path or a filename under ${ROS2_CONFIG_DIR},"
+    echo "for example: $0 run-offline my_records.yaml"
     ;;
 esac

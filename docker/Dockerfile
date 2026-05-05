@@ -167,6 +167,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-rosbag2-storage \
     ros-${ROS_DISTRO}-rviz2 \
     ros-${ROS_DISTRO}-std-msgs \
+    ros-${ROS_DISTRO}-realsense2-camera \
+    ros-${ROS_DISTRO}-librealsense2 \
+    usbutils \
     && rm -rf /var/lib/apt/lists/*
 
 

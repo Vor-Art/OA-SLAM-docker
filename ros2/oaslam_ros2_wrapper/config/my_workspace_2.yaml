@@ -1,0 +1,37 @@
+scout_slam_node:
+  ros__parameters:
+    # Input
+    rgb_topic: "/camera/color/image_raw"
+    depth_topic: "/camera/aligned_depth_to_color/image_raw"
+    imu_topic: "/camera/imu"
+    bag_path: "/opt/OA-SLAM/Data/my_workspace_data/run2"
+
+    # Publishers
+    pose_topic: "/oa_slam/camera_pose"
+    world_frame_id: "map"
+    agent_id: "agent_2"
+    local_semantic_map_snapshot_topic: "/agent_2/semantic_map_snapshot"
+    local_semantic_map_delta_topic: "/agent_2/semantic_map_delta"
+
+    # SLAM Backend
+    vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
+    camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/realsense_d435i.yaml"
+    use_viewer: true
+    use_imu: false
+    use_sim_time: false
+
+    # Observation Source
+    observation_mode: "onnx"  # "onnx", "file", or "none"
+    detection_model_path: "/opt/OA-SLAM/Data/yolov5m_640x480.onnx"
+    detection_file_path: ""
+    # Filters COCO classes that are usually dynamic in SLAM maps: person,
+    # vehicles, and animals. COCO does not expose hands/arms separately, so
+    # those aliases are treated as person when used in an ignored category file.
+    ignore_dynamic_categories: true
+    ignored_categories_file: ""
+
+    # Relocalization
+    relocalization_mode: "points_and_objects"  # "points", "objects", or "points_and_objects"
+
+    # Output
+    output_folder: "/opt/OA-SLAM/Data/run/my_workspace_data/run2"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format

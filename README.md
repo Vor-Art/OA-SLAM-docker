@@ -57,11 +57,13 @@ Default config:
 ./docker/run.sh run-online
 ```
 
-Run with a custom parameter file inside the container:
+Run with a custom parameter file under `ros2/oaslam_ros2_wrapper/config`:
 
 ```bash
-./docker/run.sh run-online /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/online_vio.yaml
+./docker/run.sh run-online my_records.yaml
 ```
+
+Full container paths are also accepted.
 
 ## ROS 2 Offline Run
 
@@ -74,11 +76,13 @@ Default config:
 ```
 
 To run another bag, edit `bag_path` in a parameter file under `ros2/` or `Data/`
-and pass that container path:
+and pass the config filename:
 
 ```bash
-./docker/run.sh run-offline /opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/offline_vio.yaml
+./docker/run.sh run-offline my_records.yaml
 ```
+
+Full container paths are also accepted.
 
 The bag must contain the configured RGB and depth topics. The IMU topic is read
 when available; if it is missing, the offline node logs a warning and continues.
