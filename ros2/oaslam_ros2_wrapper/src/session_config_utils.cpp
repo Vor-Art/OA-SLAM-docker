@@ -701,6 +701,10 @@ void ShutdownNodeRuntime(NodeRuntime& runtime, const rclcpp::Logger& logger) {
           output_dir / "CameraTrajectory_optimized.txt";
       const std::filesystem::path final_keyframe_path =
           output_dir / "KeyFrameTrajectory_optimized.txt";
+      const std::filesystem::path object_map_txt_path =
+          output_dir / "MapObjects.txt";
+      const std::filesystem::path object_map_obj_path =
+          output_dir / "MapObjects.obj";
       try {
         if (runtime.session->saveFinalTrajectory(final_trajectory_path.string(),
                                                  final_keyframe_path.string())) {
@@ -718,6 +722,25 @@ void ShutdownNodeRuntime(NodeRuntime& runtime, const rclcpp::Logger& logger) {
       } catch (...) {
         RCLCPP_WARN(logger,
                     "Final optimized trajectory save raised | err=unknown");
+      }
+
+      try {
+        if (runtime.session->saveObjectMap(object_map_txt_path.string(),
+                                           object_map_obj_path.string())) {
+          const std::string message =
+              console::Prefix("object-map") + " " +
+              console::StatusOk("saved") + " | " +
+              console::KeyValue("txt", object_map_txt_path.string()) + " | " +
+              console::KeyValue("obj", object_map_obj_path.string());
+          RCLCPP_INFO(logger, "%s", message.c_str());
+        }
+      } catch (const std::exception& exc) {
+        RCLCPP_WARN(logger,
+                    "Final object map save raised | err=%s",
+                    exc.what());
+      } catch (...) {
+        RCLCPP_WARN(logger,
+                    "Final object map save raised | err=unknown");
       }
     }
 

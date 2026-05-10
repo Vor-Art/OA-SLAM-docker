@@ -40,6 +40,8 @@ class OrbSlam3BackendAdapter final : public ISlamBackend {
   void shutdown() override;
   bool saveFinalTrajectory(const std::string& frame_trajectory_path,
                            const std::string& keyframe_trajectory_path) override;
+  bool saveObjectMap(const std::string& object_map_txt_path,
+                     const std::string& object_map_obj_path) override;
   int keyframesInQueue() const override;
 
   bool shouldQuit() const;

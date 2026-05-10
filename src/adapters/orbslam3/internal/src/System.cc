@@ -1600,17 +1600,25 @@ void System::SaveMapPointsOBJ(const string &filename)
 
 void System::SaveMapObjectsOBJ(const string& filename)
 {
-    Map* pCurrentMap = mpAtlas->GetCurrentMap();
-    std::vector<MapObject*> objects = pCurrentMap->GetAllMapObjects();
+    Map* pCurrentMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
     std::ofstream f;
     f.open(filename.c_str());
     f << fixed;
 
+    if (!pCurrentMap) {
+        f.close();
+        cout << "Save map objects in " << filename << endl;
+        return;
+    }
+
+    std::vector<MapObject*> objects = pCurrentMap->GetAllMapObjects();
+
     for (size_t i = 0; i < objects.size(); ++i) {
-        if (objects[i]->GetTrack()->IsBad())
+        ObjectTrack* track = objects[i] ? objects[i]->GetTrack() : nullptr;
+        if (!track || track->IsBad())
             continue;
 
-        const cv::Scalar& c = objects[i]->GetTrack()->GetColor();
+        const cv::Scalar& c = track->GetColor();
         auto pts = objects[i]->GetEllipsoid().GeneratePointCloud(200);
         for (int j = 0; j < pts.rows(); ++j) {
             f << "v " << setprecision(7) << " "<< pts(j, 0)
@@ -1629,18 +1637,26 @@ void System::SaveMapObjectsOBJ(const string& filename)
 
 void System::SaveMapObjectsTXT(const std::string& filename)
 {
-    Map* pCurrentMap = mpAtlas->GetCurrentMap();
-    std::vector<MapObject*> objects = pCurrentMap->GetAllMapObjects();
+    Map* pCurrentMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
     std::ofstream f;
     f.open(filename.c_str());
     f << fixed;
 
+    if (!pCurrentMap) {
+        f.close();
+        cout << "Save map objects in " << filename << endl;
+        return;
+    }
+
+    std::vector<MapObject*> objects = pCurrentMap->GetAllMapObjects();
+
     for (size_t i = 0; i < objects.size(); ++i) {
-        if (objects[i]->GetTrack()->IsBad())
+        ObjectTrack* track = objects[i] ? objects[i]->GetTrack() : nullptr;
+        if (!track || track->IsBad())
             continue;
         const auto& ell = objects[i]->GetEllipsoid();
-        f << objects[i]->GetTrack()->GetId() << " "
-          << objects[i]->GetTrack()->GetCategoryId();
+        f << track->GetId() << " "
+          << track->GetCategoryId();
         Eigen::Matrix4d Q = ell.AsDual();
         double *p = Q.data();
         for (int i = 0; i < 16; ++i) {

@@ -89,6 +89,15 @@ bool SlamSession::saveFinalTrajectory(
   return false;
 }
 
+bool SlamSession::saveObjectMap(const std::string& object_map_txt_path,
+                                const std::string& object_map_obj_path) {
+  if (modules_.slam_backend) {
+    return modules_.slam_backend->saveObjectMap(object_map_txt_path,
+                                                object_map_obj_path);
+  }
+  return false;
+}
+
 int SlamSession::keyframesInQueue() const {
   if (modules_.slam_backend) {
     return modules_.slam_backend->keyframesInQueue();

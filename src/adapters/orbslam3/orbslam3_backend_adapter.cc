@@ -369,6 +369,30 @@ bool OrbSlam3BackendAdapter::saveFinalTrajectory(
   return true;
 }
 
+bool OrbSlam3BackendAdapter::saveObjectMap(
+    const std::string& object_map_txt_path,
+    const std::string& object_map_obj_path) {
+  if (!system_) {
+    return false;
+  }
+
+  if (!shutdown_called_) {
+    shutdown_called_ = true;
+    system_->Shutdown();
+  }
+
+  bool saved = false;
+  if (!object_map_txt_path.empty()) {
+    system_->SaveMapObjectsTXT(object_map_txt_path);
+    saved = true;
+  }
+  if (!object_map_obj_path.empty()) {
+    system_->SaveMapObjectsOBJ(object_map_obj_path);
+    saved = true;
+  }
+  return saved;
+}
+
 bool OrbSlam3BackendAdapter::shouldQuit() const {
   return system_ && system_->isShutDown();
 }

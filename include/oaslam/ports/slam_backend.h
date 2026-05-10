@@ -25,6 +25,12 @@ class ISlamBackend {
     (void)keyframe_trajectory_path;
     return false;
   }
+  virtual bool saveObjectMap(const std::string& object_map_txt_path,
+                             const std::string& object_map_obj_path) {
+    (void)object_map_txt_path;
+    (void)object_map_obj_path;
+    return false;
+  }
 
   /// Returns the number of keyframes waiting in the local mapping queue.
   /// Used for backpressure: callers can throttle frame feeding when the queue

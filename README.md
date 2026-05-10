@@ -116,7 +116,9 @@ Important parameters:
 - `relocalization_mode` - `points`, `objects`, or `points_and_objects`.
 - `use_viewer` - enables Pangolin viewer windows.
 - `use_imu` - enables IMU use in the SLAM backend.
-- `output_folder` - base folder for timestamped TUM trajectory outputs.
+- `output_folder` - base folder for timestamped trajectory and object-map
+  outputs (`CameraTrajectory*.txt`, `KeyFrameTrajectory_optimized.txt`,
+  `MapObjects.txt`, `MapObjects.obj`).
 
 Object initialization gates are configured in the camera settings YAML:
 `Detector.MinInitObservations`, `Detector.MinReconstructionAngleDeg`,

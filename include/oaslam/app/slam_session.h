@@ -17,6 +17,8 @@ class SlamSession {
   void shutdown();
   bool saveFinalTrajectory(const std::string& frame_trajectory_path,
                            const std::string& keyframe_trajectory_path);
+  bool saveObjectMap(const std::string& object_map_txt_path,
+                     const std::string& object_map_obj_path);
 
   /// Returns the number of keyframes waiting in the SLAM backend's local
   /// mapping queue. Returns 0 if the backend does not support this query.
