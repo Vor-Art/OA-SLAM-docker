@@ -508,6 +508,9 @@ OnlineTopicParams DeclareOnlineTopicParameters(rclcpp::Node& node) {
       node.declare_parameter<std::string>(
           "local_semantic_map_delta_topic",
           "/" + params.publisher.agent_id + "/semantic_map_delta");
+  params.publisher.local_pose_topic =
+      node.declare_parameter<std::string>(
+          "local_pose_topic", "/" + params.publisher.agent_id + "/submap_pose");
   return params;
 }
 
@@ -546,6 +549,9 @@ OfflineTopicParams DeclareOfflineTopicParameters(rclcpp::Node& node) {
       node.declare_parameter<std::string>(
           "local_semantic_map_delta_topic",
           "/" + params.publisher.agent_id + "/semantic_map_delta");
+  params.publisher.local_pose_topic =
+      node.declare_parameter<std::string>(
+          "local_pose_topic", "/" + params.publisher.agent_id + "/submap_pose");
   params.bag_path = node.declare_parameter<std::string>("bag_path", "");
   if (params.bag_path.empty()) {
     throw std::runtime_error(
@@ -789,6 +795,23 @@ geometry_msgs::msg::PoseStamped ToPoseStamped(
   pose.pose.orientation.z = quaternion.z();
   pose.pose.orientation.w = quaternion.w();
   return pose;
+}
+
+shared_semantic_map_interfaces::msg::LocalPose ToLocalPoseMsg(
+    const std_msgs::msg::Header& header,
+    const PublisherParams& params,
+    std::uint64_t map_id,
+    std::uint64_t sequence,
+    const oaslam::Transform4d& transform) {
+  shared_semantic_map_interfaces::msg::LocalPose message;
+  message.header = header;
+  message.header.frame_id = params.world_frame_id;
+  message.agent_id = params.agent_id;
+  message.session_id = params.session_id;
+  message.map_id = map_id;
+  message.sequence = sequence;
+  message.pose = ToPose(transform);
+  return message;
 }
 
 geometry_msgs::msg::Pose ToPose(const oaslam::Transform4d& transform) {

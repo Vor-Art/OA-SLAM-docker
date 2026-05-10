@@ -42,6 +42,9 @@ class OaSlamVioNode : public rclcpp::Node {
     // Set up publishers
     pose_publisher_ =
         create_publisher<geometry_msgs::msg::PoseStamped>(topics_.publisher.pose_topic, 10);
+    local_pose_publisher_ =
+        create_publisher<shared_semantic_map_interfaces::msg::LocalPose>(
+            topics_.publisher.local_pose_topic, 10);
     map_points_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>(
         topics_.publisher.map_points_topic, 10);
     new_map_points_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -101,6 +104,7 @@ class OaSlamVioNode : public rclcpp::Node {
          {"Depth topic", topics_.shared.depth_topic},
          {"IMU topic", topics_.shared.imu_topic},
          {"Pose topic", topics_.publisher.pose_topic},
+         {"Local pose topic", topics_.publisher.local_pose_topic},
          {"Map points topic", topics_.publisher.map_points_topic},
          {"New map points topic", topics_.publisher.new_map_points_topic},
          {"Visible map points topic", topics_.publisher.visible_map_points_topic},
@@ -233,6 +237,13 @@ class OaSlamVioNode : public rclcpp::Node {
             rgb_msg->header,
             topics_.publisher.world_frame_id,
             result.tracking.T_world_camera));
+    local_pose_publisher_->publish(
+        oaslam_ros2_wrapper::ToLocalPoseMsg(
+            rgb_msg->header,
+            topics_.publisher,
+            result.tracking.semantic_map.map_id,
+            result.tracking.semantic_map.sequence,
+            result.tracking.T_world_camera));
     map_points_publisher_->publish(oaslam_ros2_wrapper::ToPointCloud2(
         rgb_msg->header, topics_.publisher.world_frame_id,
         result.tracking.scene.map_points));
@@ -302,6 +313,8 @@ class OaSlamVioNode : public rclcpp::Node {
 
   // Pose publisher
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher_;
+  rclcpp::Publisher<shared_semantic_map_interfaces::msg::LocalPose>::SharedPtr
+      local_pose_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       new_map_points_publisher_;

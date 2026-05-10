@@ -4436,10 +4436,14 @@ bool Tracking::Relocalization()
 
 void Tracking::RemoveTrack(ObjectTrack::Ptr track)
 {
+    if (!track)
+        return;
+
     Map* pCurMap = mpAtlas->GetCurrentMap();
     if (track->GetMapObject() && pCurMap)
         pCurMap->EraseMapObject(track->GetMapObject());
     objectTracks_.remove(track);
+    retiredObjectTracks_.push_back(std::move(track));
 }
 
 bool Tracking::RelocalizationFromObjects(bool use_points)

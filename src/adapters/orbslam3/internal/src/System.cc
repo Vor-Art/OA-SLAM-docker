@@ -565,6 +565,11 @@ void System::SaveTrajectoryTUM(const string &filename)
 
     vector<KeyFrame*> vpKFs = mpAtlas->GetAllKeyFrames();
     sort(vpKFs.begin(),vpKFs.end(),KeyFrame::lId);
+    if(vpKFs.empty())
+    {
+        cerr << "WARNING: SaveTrajectoryTUM skipped because atlas has no keyframes." << endl;
+        return;
+    }
 
     // Transform all keyframes so that the first keyframe is at the origin.
     // After a loop closure the first keyframe might not be at the origin.
@@ -590,15 +595,19 @@ void System::SaveTrajectoryTUM(const string &filename)
             continue;
 
         KeyFrame* pKF = *lRit;
+        if(!pKF)
+            continue;
 
         Sophus::SE3f Trw;
 
         // If the reference keyframe was culled, traverse the spanning tree to get a suitable keyframe.
-        while(pKF->isBad())
+        while(pKF && pKF->isBad())
         {
             Trw = Trw * pKF->mTcp;
             pKF = pKF->GetParent();
         }
+        if(!pKF)
+            continue;
 
         Trw = Trw * pKF->GetPose() * Two;
 
@@ -620,6 +629,11 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
 
     vector<KeyFrame*> vpKFs = mpAtlas->GetAllKeyFrames();
     sort(vpKFs.begin(),vpKFs.end(),KeyFrame::lId);
+    if(vpKFs.empty())
+    {
+        cerr << "WARNING: SaveKeyFrameTrajectoryTUM skipped because atlas has no keyframes." << endl;
+        return;
+    }
 
     // Transform all keyframes so that the first keyframe is at the origin.
     // After a loop closure the first keyframe might not be at the origin.

@@ -143,7 +143,7 @@ resolve_ros2_params_file() {
 
   if [[ -z "$params_file" ]]; then
     echo "$default_params_file"
-  elif [[ "$params_file" == /* || "$params_file" == *"/"* ]]; then
+  elif [[ "$params_file" == /* || "$params_file" == "/"* ]]; then
     echo "$params_file"
   else
     echo "${ROS2_CONFIG_DIR}/${params_file}"

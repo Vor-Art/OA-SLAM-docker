@@ -4,19 +4,20 @@ scout_slam_node:
     rgb_topic: "/camera/color/image_raw"
     depth_topic: "/camera/aligned_depth_to_color/image_raw"
     imu_topic: "/camera/imu"
-    bag_path: "/opt/OA-SLAM/Data/my_workspace_data/run3"
+    bag_path: "/opt/OA-SLAM/Data/my_workspace_data/run1"
 
     # Publishers
-    pose_topic: "/oa_slam/camera_pose"
+    pose_topic: "/agent_1/camera_pose"
+    local_pose_topic: "/agent_1/submap_pose"
     world_frame_id: "map"
-    agent_id: "agent_3"
-    local_semantic_map_snapshot_topic: "/agent_3/semantic_map_snapshot"
-    local_semantic_map_delta_topic: "/agent_3/semantic_map_delta"
+    agent_id: "agent_1"
+    local_semantic_map_snapshot_topic: "/agent_1/semantic_map_snapshot"
+    local_semantic_map_delta_topic: "/agent_1/semantic_map_delta"
 
     # SLAM Backend
     vocabulary_file: "/opt/OA-SLAM/Vocabulary/ORBvoc.txt"
     camera_settings_file: "/opt/OA-SLAM/ros2/oaslam_ros2_wrapper/config/camera/realsense_d435i.yaml"
-    use_viewer: true
+    use_viewer: false
     use_imu: false
     use_sim_time: false
 
@@ -34,4 +35,4 @@ scout_slam_node:
     relocalization_mode: "points_and_objects"  # "points", "objects", or "points_and_objects"
 
     # Output
-    output_folder: "/opt/OA-SLAM/Data/run/my_workspace_data/run3"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format
+    output_folder: "/opt/OA-SLAM/Data/run/my_workspace_data/run1"  # Base directory for a timestamped run folder containing CameraTrajectory.txt in TUM format

@@ -18,6 +18,7 @@
 #include <shared_semantic_map_interfaces/msg/local_semantic_map_delta.hpp>
 #include <shared_semantic_map_interfaces/msg/local_semantic_map_snapshot.hpp>
 #include <shared_semantic_map_interfaces/msg/local_semantic_object.hpp>
+#include <shared_semantic_map_interfaces/msg/local_pose.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
@@ -37,6 +38,7 @@ struct PublisherParams {
   std::string semantic_map_markers_topic;
   std::string local_semantic_map_snapshot_topic;
   std::string local_semantic_map_delta_topic;
+  std::string local_pose_topic;
   std::string world_frame_id;
   std::string agent_id;
   std::string session_id;
@@ -125,6 +127,15 @@ void LogNodeStartup(const rclcpp::Logger& logger,
 geometry_msgs::msg::PoseStamped ToPoseStamped(
     const std_msgs::msg::Header& header,
     const std::string& world_frame_id,
+    const oaslam::Transform4d& transform);
+
+geometry_msgs::msg::Pose ToPose(const oaslam::Transform4d& transform);
+
+shared_semantic_map_interfaces::msg::LocalPose ToLocalPoseMsg(
+    const std_msgs::msg::Header& header,
+    const PublisherParams& params,
+    std::uint64_t map_id,
+    std::uint64_t sequence,
     const oaslam::Transform4d& transform);
 
 sensor_msgs::msg::PointCloud2 ToPointCloud2(

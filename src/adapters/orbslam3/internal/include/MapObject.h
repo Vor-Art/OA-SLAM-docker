@@ -51,7 +51,7 @@ class MapObject
             return object_track_;
         }
 
-        const Ellipsoid& GetEllipsoid() const {
+        Ellipsoid GetEllipsoid() const {
             std::unique_lock<std::mutex> lock(mutex_ellipsoid_);
             return ellipsoid_;
         }

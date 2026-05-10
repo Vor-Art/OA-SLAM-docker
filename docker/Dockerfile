@@ -172,6 +172,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     usbutils \
     && rm -rf /var/lib/apt/lists/*
 
+# MCAP rosbag storage plugin. Keep this in a late layer so image rebuilds reuse
+# the expensive OpenCV/Pangolin/Sophus/vocabulary layers above.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-rosbag2-storage-mcap \
+    && rm -rf /var/lib/apt/lists/*
+
 
 
 

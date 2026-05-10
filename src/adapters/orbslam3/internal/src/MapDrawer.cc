@@ -157,9 +157,12 @@ void MapDrawer::DrawMapPoints(double size, bool ignore_objects_points)
     if (ignore_objects_points) {
         const std::vector<MapObject*> objects = pActiveMap->GetAllMapObjects();
         for (auto* obj : objects) {
+            if (!obj || !obj->GetTrack())
+                continue;
             auto assoc_points = obj->GetTrack()->GetFilteredAssociatedMapPoints(10);
             for (auto pt_cnt : assoc_points) {
-                associated.insert(pt_cnt.first);
+                if (pt_cnt.first)
+                    associated.insert(pt_cnt.first);
             }
         }
     }
@@ -214,6 +217,8 @@ void MapDrawer::DrawMapObjectsPoints(double size)
     const auto& color_manager = CategoryColorsManager::GetInstance();
     const std::vector<MapObject*> objects = pActiveMap->GetAllMapObjects();
     for (auto* obj : objects) {
+        if (!obj || !obj->GetTrack())
+            continue;
         cv::Scalar c;
         if (use_category_cols_) {
             c = color_manager[obj->GetTrack()->GetCategoryId()];
@@ -229,7 +234,7 @@ void MapDrawer::DrawMapObjectsPoints(double size)
         for (auto pt_cnt : assoc_points) {
             MapPoint* pt = pt_cnt.first;
 
-            if (pt->isBad())
+            if (!pt || pt->isBad())
                 continue;
             Eigen::Vector3f pos = pt->GetWorldPos();
             glVertex3f(pos(0),pos(1),pos(2));
@@ -263,6 +268,8 @@ void MapDrawer::DrawMapObjects()
     const auto& color_manager = CategoryColorsManager::GetInstance();
     glLineWidth(2);
     for (auto *obj : objects) {
+        if (!obj || !obj->GetTrack())
+            continue;
         cv::Scalar c;
         if (use_category_cols_) {
             c = color_manager[obj->GetTrack()->GetCategoryId()];
@@ -272,7 +279,7 @@ void MapDrawer::DrawMapObjects()
         glColor3f(static_cast<double>(c(2)) / 255,
                   static_cast<double>(c(1)) / 255,
                   static_cast<double>(c(0)) / 255);
-        const Ellipsoid& ell = obj->GetEllipsoid();
+        const Ellipsoid ell = obj->GetEllipsoid();
         if (!display_3d_bbox_) {
             auto pts = ell.GeneratePointCloud();
             int i = 0;

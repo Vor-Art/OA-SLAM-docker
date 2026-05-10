@@ -415,6 +415,10 @@ protected:
 
     // OA-SLAM object tracking members
     std::list<ObjectTrack::Ptr> objectTracks_;
+    // MapObject is owned by ObjectTrack but rendered/optimized through raw
+    // pointers in other ORB-SLAM3 threads. Keep removed tracks alive until
+    // Tracking is destroyed so stale snapshots cannot become dangling.
+    std::list<ObjectTrack::Ptr> retiredObjectTracks_;
     size_t current_frame_idx_ = 0;
     bool createdNewKeyFrame_ = false;
     std::vector<Detection::Ptr> current_frame_detections_;
