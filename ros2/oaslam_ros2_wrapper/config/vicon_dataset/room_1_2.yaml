@@ -6,10 +6,10 @@ scout_slam_node:
     imu_topic: "/drone/camera/imu"
 
     # Input/Output
-    start_offset_sec: 2.0
-    finish_time_sec: 62.0
-    bag_path: "/opt/OA-SLAM/Data/vicon_dataset/room_1_1"
-    output_folder: "/opt/OA-SLAM/Data/run/vicon_dataset/room_1_1/"  # Base directory for timestamped TUM output
+    start_offset_sec: 5.0
+    finish_time_sec: 67.0
+    bag_path: "/opt/OA-SLAM/Data/vicon_dataset/room_1_2"
+    output_folder: "/opt/OA-SLAM/Data/run/vicon_dataset/room_1_2/"  # Base directory for timestamped TUM output
 
     # Register raw depth pixels into the RGB optical frame before RGB-D SLAM.
     depth_alignment_enabled: true
